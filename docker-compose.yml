@@ -1,6 +1,19 @@
 version: "3.9"
 
 services:
+
+  db:
+    image: postgres:16-alpine
+    container_name: ai_marketing_db
+    environment:
+      POSTGRES_DB: aimarketing
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
   backend:
     build: ./apps/backend
     container_name: ai_marketing_backend
@@ -10,6 +23,10 @@ services:
       - "8000:8000"
     volumes:
       - ./apps/backend:/app
+    depends_on:
+      - db
+    environment:
+      - DATABASE_URL=postgresql+psycopg://postgres:postgres@db:5432/aimarketing
 
   frontend:
     build: ./apps/frontend
@@ -23,3 +40,9 @@ services:
       - CHOKIDAR_USEPOLLING=true
     depends_on:
       - backend
+
+volumes:
+  pgdata:
+
+
+  

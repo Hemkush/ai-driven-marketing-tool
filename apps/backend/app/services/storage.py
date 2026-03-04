@@ -1,24 +1,32 @@
 import json
-from pathlib import Path
-from datetime import datetime, timezone
-
-DATA_DIR = Path("data")
-DATA_DIR.mkdir(exist_ok=True)
-FILE_PATH = DATA_DIR / "generations.jsonl"
+from app.db import SessionLocal
+from app.models import Generation
 
 def save_generation(payload: dict, result: dict) -> dict:
-    record = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "input": payload,
-        "output": result,
-    }
-    with FILE_PATH.open("a", encoding="utf-8") as f:
-        f.write(json.dumps(record) + "\n")
-    return record
+    with SessionLocal() as db:
+        row = Generation(
+            input_json=json.dumps(payload),
+            output_json=json.dumps(result),
+        )
+        db.add(row)
+        db.commit()
+        db.refresh(row)
+        return {
+            "id": row.id,
+            "timestamp": row.timestamp.isoformat(),
+            "input": payload,
+            "output": result,
+        }
 
 def list_generations(limit: int = 20) -> list[dict]:
-    if not FILE_PATH.exists():
-        return []
-    lines = FILE_PATH.read_text(encoding="utf-8").strip().splitlines()
-    records = [json.loads(line) for line in lines if line.strip()]
-    return records[-limit:][::-1]
+    with SessionLocal() as db:
+        rows = db.query(Generation).order_by(Generation.id.desc()).limit(limit).all()
+        return [
+            {
+                "id": r.id,
+                "timestamp": r.timestamp.isoformat(),
+                "input": json.loads(r.input_json),
+                "output": json.loads(r.output_json),
+            }
+            for r in rows
+        ]
