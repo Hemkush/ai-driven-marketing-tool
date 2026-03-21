@@ -3,7 +3,7 @@ version: "3.9"
 services:
 
   db:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     container_name: ai_marketing_db
     environment:
       POSTGRES_DB: aimarketing
@@ -27,6 +27,7 @@ services:
       - db
     environment:
       - DATABASE_URL=postgresql+psycopg://postgres:postgres@db:5432/aimarketing
+      - CORS_ORIGINS=http://localhost:5173,http://localhost:5174
 
   frontend:
     build: ./apps/frontend

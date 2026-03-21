@@ -13,7 +13,7 @@ def test_ping():
     assert r.status_code == 200
     assert r.json()["message"] == "pong"
 
-def test_generate_validation_error():
+def test_generate_requires_auth():
     payload = {"product": "A", "audience": "B", "goal": "C"}  # too short for your Field rules
     r = client.post("/api/generate", json=payload)
-    assert r.status_code == 422
+    assert r.status_code == 401

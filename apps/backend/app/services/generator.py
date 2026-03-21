@@ -7,6 +7,8 @@ def _get_client() -> OpenAI:
     return OpenAI(
         api_key=settings.openai_api_key,
         base_url=settings.openai_base_url,
+        timeout=15,
+        max_retries=0,
     )
 
 
@@ -51,8 +53,9 @@ Goal: {goal}
 Return only valid JSON with keys:
 email_subject, email_body, instagram_caption, google_ad_headlines, google_ad_descriptions
 """
+    client = _get_client()
     response = client.responses.create(
-        model=MODEL,
+        model=settings.openai_model,
         input=prompt,
     )
 

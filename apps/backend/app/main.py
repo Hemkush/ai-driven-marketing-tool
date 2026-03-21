@@ -1,9 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import router
+from app.api.mvp_routes import router as mvp_router
 from app.core.config import settings
-from app.db import Base, engine
-from app import models  # noqa: F401
 from fastapi.responses import JSONResponse
 from fastapi import Request
 import time
@@ -11,8 +10,6 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from prometheus_fastapi_instrumentator import Instrumentator
 from app.core.rate_limit import limiter
-
-Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="AI Marketing Tool API")
 
@@ -24,13 +21,14 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.frontend_url],
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 app.include_router(router)
+app.include_router(mvp_router)
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
