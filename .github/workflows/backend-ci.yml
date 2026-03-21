@@ -13,6 +13,28 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d test_db"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/test_db
+      JWT_SECRET_KEY: test-secret
+      INTERNAL_API_KEY: test-internal
+      OPENAI_API_KEY: test-key
+      OPENAI_MODEL: gpt-4o-mini
+      OPENAI_BASE_URL: https://us.api.openai.com/v1
+      FRONTEND_URL: http://localhost:5173
     defaults:
       run:
         working-directory: apps/backend
@@ -31,10 +53,8 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Run migrations
+        run: alembic upgrade head
+
       - name: Run tests
-        env:
-          OPENAI_API_KEY: test-key
-          OPENAI_MODEL: gpt-4o-mini
-          OPENAI_BASE_URL: https://us.api.openai.com/v1
-          FRONTEND_URL: http://localhost:5173
         run: pytest -q
