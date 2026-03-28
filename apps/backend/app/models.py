@@ -77,6 +77,7 @@ class QuestionnaireSession(Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), nullable=False, index=True)
     status: Mapped[str] = mapped_column(String(40), default="in_progress", nullable=False)
+    conversation_analysis_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[DateTime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -138,6 +139,9 @@ class AnalysisReport(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), nullable=False, index=True)
+    source_session_id: Mapped[int | None] = mapped_column(
+        ForeignKey("questionnaire_sessions.id"), nullable=True, index=True
+    )
     status: Mapped[str] = mapped_column(String(40), default="queued", nullable=False)
     report_json: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[DateTime] = mapped_column(
@@ -155,9 +159,13 @@ class PositioningStatement(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), nullable=False, index=True)
+    source_session_id: Mapped[int | None] = mapped_column(
+        ForeignKey("questionnaire_sessions.id"), nullable=True, index=True
+    )
     version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     statement_text: Mapped[str] = mapped_column(Text, nullable=False)
     rationale: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    payload_json: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
     created_at: Mapped[DateTime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -170,6 +178,9 @@ class ResearchReport(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), nullable=False, index=True)
+    source_session_id: Mapped[int | None] = mapped_column(
+        ForeignKey("questionnaire_sessions.id"), nullable=True, index=True
+    )
     status: Mapped[str] = mapped_column(String(40), default="queued", nullable=False)
     report_json: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[DateTime] = mapped_column(
@@ -184,6 +195,9 @@ class PersonaProfile(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), nullable=False, index=True)
+    source_session_id: Mapped[int | None] = mapped_column(
+        ForeignKey("questionnaire_sessions.id"), nullable=True, index=True
+    )
     persona_name: Mapped[str] = mapped_column(String(160), nullable=False)
     persona_json: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[DateTime] = mapped_column(
@@ -198,6 +212,9 @@ class ChannelStrategy(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), nullable=False, index=True)
+    source_session_id: Mapped[int | None] = mapped_column(
+        ForeignKey("questionnaire_sessions.id"), nullable=True, index=True
+    )
     strategy_json: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[DateTime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -211,6 +228,9 @@ class RoadmapPlan(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), nullable=False, index=True)
+    source_session_id: Mapped[int | None] = mapped_column(
+        ForeignKey("questionnaire_sessions.id"), nullable=True, index=True
+    )
     plan_json: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[DateTime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -224,6 +244,9 @@ class MediaAsset(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), nullable=False, index=True)
+    source_session_id: Mapped[int | None] = mapped_column(
+        ForeignKey("questionnaire_sessions.id"), nullable=True, index=True
+    )
     asset_type: Mapped[str] = mapped_column(String(80), nullable=False)
     storage_uri: Mapped[str] = mapped_column(Text, nullable=False)
     prompt_text: Mapped[str] = mapped_column(Text, default="", nullable=False)

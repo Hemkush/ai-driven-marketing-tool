@@ -535,7 +535,7 @@ def answer_analysis_question(
     chat_history: list[dict] | None = None,
     memory_context_chunks: list[dict] | None = None,
 ) -> dict:
-    def _ensure_structured_answer(raw: str) -> str:
+    def _ensure_structured_answer(raw: str, include_validation: bool = False) -> str:
         text_raw = (raw or "").strip()
         if not text_raw:
             return ""
@@ -584,9 +584,10 @@ def answer_analysis_question(
         out_lines.append("")
         out_lines.append("Recommended Actions:")
         out_lines.extend([f"- {x}" for x in action_items] or ["- Prioritize highest-impact segment and channel opportunities."])
-        out_lines.append("")
-        out_lines.append("Next Questions / Validation:")
-        out_lines.extend([f"- {x}" for x in next_items] or ["- Validate assumptions with updated business inputs."])
+        if include_validation and next_items:
+            out_lines.append("")
+            out_lines.append("Next Questions / Validation:")
+            out_lines.extend([f"- {x}" for x in next_items])
         return "\n".join(out_lines).strip()
 
     chat_history = chat_history or []
@@ -598,6 +599,22 @@ def answer_analysis_question(
             "rerun_reason": "",
             "source": "fallback",
         }
+
+    lower_q = q.lower()
+    include_validation = any(
+        token in lower_q
+        for token in [
+            "validate",
+            "validation",
+            "assumption",
+            "assumptions",
+            "risk",
+            "next question",
+            "follow-up",
+            "follow up",
+            "what next",
+        ]
+    )
 
     if not settings.can_use_openai():
         recommended = analysis_report.get("segment_attractiveness_analysis", {}).get(
@@ -661,19 +678,21 @@ def answer_analysis_question(
         topic = str(chunk.get("topic_tag", "")).strip()
         memory_context.append({"topic": topic, "snippet": text[:500]})
     prompt = (
-        "You are AnalysisCopilot for a marketing strategy application.\n"
-        "Answer user questions about the current segment analysis clearly and concisely.\n"
+        "You are CompetitiveBenchmarkingCopilot for a marketing strategy application.\n"
+        "Answer user questions about the competitive benchmarking report clearly and concisely.\n"
+        "The report contains real local competitor data fetched from Google Places, enriched with AI insights.\n"
         "Your answer MUST be structured and readable with headings and bullet points.\n"
         "Formatting rules for answer field:\n"
         "- Use plain text with section headings followed by bullet points.\n"
         "- If user asks for SWOT, use exactly these headings: Strengths, Weaknesses, Opportunities, Threats.\n"
         "- Provide 3-5 bullets under each SWOT heading.\n"
-        "- Keep bullets concrete and tied to available analysis context.\n"
-        "If user shares new facts that materially change assumptions, recommend rerun.\n"
+        "- Keep bullets concrete and tied to the competitor and market data in the report.\n"
+        "- Reference specific competitor names, ratings, and price levels where relevant.\n"
+        "If user shares new facts that materially change their situation, recommend rerun.\n"
         "Return strict JSON only:\n"
         '{ "answer":"...", "recommend_rerun":true|false, "rerun_reason":"..." }\n\n'
         f"Business location: {business_address or ''}\n"
-        f"Analysis report:\n{json.dumps(analysis_report, ensure_ascii=True)}\n"
+        f"Competitive benchmarking report:\n{json.dumps(analysis_report, ensure_ascii=True)}\n"
         f"Discovery responses:\n{json.dumps(transcript, ensure_ascii=True)}\n"
         f"Retrieved memory snippets (high-relevance):\n{json.dumps(memory_context, ensure_ascii=True)}\n"
         f"Recent chat history:\n{json.dumps(chat_history[-8:], ensure_ascii=True)}\n"
@@ -689,7 +708,26 @@ def answer_analysis_question(
         resp = client.responses.create(model=settings.openai_model, input=prompt)
         raw_text = _response_to_text(resp)
         parsed = _extract_json(raw_text) or {}
-        answer = str(parsed.get("answer", "")).strip()
+
+        raw_answer = parsed.get("answer", "")
+        if isinstance(raw_answer, dict):
+            answer = str(raw_answer.get("answer") or raw_answer.get("content") or "").strip()
+        elif isinstance(raw_answer, list):
+            answer = " ".join(str(x).strip() for x in raw_answer if str(x).strip()).strip()
+        else:
+            answer = str(raw_answer).strip()
+
+        # Handle nested JSON string cases, e.g. answer = '{"answer":"...","recommend_rerun":false}'
+        if answer.startswith("{") and answer.endswith("}"):
+            nested = _extract_json(answer) or {}
+            nested_answer = nested.get("answer") or nested.get("content")
+            if isinstance(nested_answer, str) and nested_answer.strip():
+                answer = nested_answer.strip()
+                if "recommend_rerun" not in parsed and "recommend_rerun" in nested:
+                    parsed["recommend_rerun"] = nested.get("recommend_rerun")
+                if "rerun_reason" not in parsed and "rerun_reason" in nested:
+                    parsed["rerun_reason"] = nested.get("rerun_reason")
+
         # If model returned non-JSON text, still treat it as AI output.
         if not answer and raw_text.strip():
             answer = raw_text.strip()
@@ -697,7 +735,7 @@ def answer_analysis_question(
         if not answer:
             raise ValueError("empty answer")
         return {
-            "answer": _ensure_structured_answer(answer),
+            "answer": _ensure_structured_answer(answer, include_validation=include_validation),
             "recommend_rerun": bool(parsed.get("recommend_rerun", False)),
             "rerun_reason": str(parsed.get("rerun_reason", "")).strip(),
             "source": "ai",

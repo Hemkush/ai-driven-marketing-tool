@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ActionRow, NextStepCta } from "../components/UiBlocks";
-import { AnalysisCards } from "../components/CompactCards";
+import { CompetitorCards } from "../components/CompactCards";
 import { LoadingSkeleton } from "../components/LoadingSkeleton";
 
 function StructuredMessage({ text }) {
@@ -115,14 +115,14 @@ export default function AnalysisPage({ workflow }) {
   const [assistantMaxHeight, setAssistantMaxHeight] = useState(null);
   const sampleQuestions = useMemo(() => {
     const pool = [
-      "Why is this primary segment recommended over the others?",
-      "What are the top 3 actions I should execute in the next 2 weeks?",
-      "Which assumption in this analysis has the highest risk?",
-      "How can I reduce CAC without hurting lead quality?",
-      "What competitor moves should I monitor monthly?",
-      "What additional data would most improve this analysis accuracy?",
-      "How should I prioritize channels for a limited budget?",
-      "Give me a concise SWOT based on the current report.",
+      "Which competitor poses the highest threat and why?",
+      "What are the 3 biggest gaps in my local market?",
+      "How should I price my services compared to these competitors?",
+      "Which competitor's weaknesses can I exploit?",
+      "What would make customers choose me over the top competitor?",
+      "How saturated is my local market really?",
+      "Which services should I add to stand out?",
+      "Give me a SWOT based on the competitive landscape.",
     ];
     const shuffled = [...pool].sort(() => Math.random() - 0.5);
     return shuffled.slice(0, 4);
@@ -168,8 +168,8 @@ export default function AnalysisPage({ workflow }) {
         <section className="compact-card analysis-gate">
           <h4>Complete Marketing Discovery First</h4>
           <p className="page-subtitle">
-            Analysis is unlocked after you finish the interview so the model has enough business,
-            customer, competitor, and budget context.
+            Competitive Benchmarking is unlocked after you finish the interview so the model has
+            enough business, location, competitor, and budget context to benchmark your local market.
           </p>
           <div className="analysis-gate-steps">
             <div className="analysis-gate-step">
@@ -182,7 +182,7 @@ export default function AnalysisPage({ workflow }) {
             </div>
             <div className="analysis-gate-step">
               <span className="analysis-gate-num">3</span>
-              <span>Return here and click Run Analysis.</span>
+              <span>Return here and click Run Competitive Benchmarking.</span>
             </div>
           </div>
           <div className="action-row">
@@ -200,20 +200,20 @@ export default function AnalysisPage({ workflow }) {
             onClick={actions.runAnalysis}
             disabled={state.busy || !state.activeProjectId || !state.interviewCompleted}
           >
-            Run Analysis
+            Run Competitive Benchmarking
           </button>
         </ActionRow>
       ) : null}
       <div className={`analysis-layout ${state.analysis ? "" : "single"}`.trim()}>
         <div ref={analysisMainRef} className="analysis-main">
           {state.busy && <LoadingSkeleton lines={4} />}
-          {!state.busy && state.analysis && <AnalysisCards analysis={state.analysis} />}
+          {!state.busy && state.analysis && <CompetitorCards analysis={state.analysis} />}
           {!state.busy && !state.analysis && state.interviewCompleted && (
             <section className="compact-card analysis-empty">
-              <h4>Analysis Not Generated Yet</h4>
+              <h4>Competitive Benchmarking Not Run Yet</h4>
               <p className="page-subtitle">
-                Your interview is complete. Generate the report to get structured market insights,
-                segment recommendations, and source-backed references.
+                Your interview is complete. Run the benchmarking report to see local competitors,
+                their pricing, services, business models, discounts, reviews, and area market size.
               </p>
               <div className="analysis-empty-points">
                 <div className="analysis-empty-point">
@@ -222,11 +222,11 @@ export default function AnalysisPage({ workflow }) {
                 </div>
                 <div className="analysis-empty-point">
                   <span className="analysis-empty-dot">1</span>
-                  <span>Click <b>Run Analysis</b> above</span>
+                  <span>Click <b>Run Competitive Benchmarking</b> above</span>
                 </div>
                 <div className="analysis-empty-point">
                   <span className="analysis-empty-dot">2</span>
-                  <span>Review the generated report and ask follow-up questions in assistant</span>
+                  <span>Review competitor profiles and ask follow-up questions in the assistant</span>
                 </div>
               </div>
             </section>
@@ -253,8 +253,8 @@ export default function AnalysisPage({ workflow }) {
                 <div className="chat-bubble bot">
                   <div className="chat-label">Assistant</div>
                   <p>
-                    Welcome. I can help you interpret this analysis, identify risks, and suggest
-                    next actions. Choose a sample question or type your own.
+                    Welcome. I can help you interpret the competitor data, identify market gaps,
+                    and suggest how to position against local competition. Choose a sample question or type your own.
                   </p>
                 </div>
               </div>
@@ -305,7 +305,7 @@ export default function AnalysisPage({ workflow }) {
               <textarea
                 id="analysis-assistant-input"
                 rows={3}
-                placeholder="Example: Why is this segment recommended? What data is missing? Should I rerun with updated budget?"
+                placeholder="Example: Which competitor should I worry about most? What pricing gap can I exploit? How do I win in this market?"
                 value={state.analysisAssistantInput}
                 onChange={(e) => set.setAnalysisAssistantInput(e.target.value)}
                 onKeyDown={(e) => {

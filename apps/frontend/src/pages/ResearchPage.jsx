@@ -21,8 +21,8 @@ export default function ResearchPage({ workflow }) {
         />
       )}
       <NextStepCta
-        to="/personas"
-        label="Next: Personas"
+        to="/strategy"
+        label="Next: Strategy"
         disabled={!state.research}
       />
     </div>

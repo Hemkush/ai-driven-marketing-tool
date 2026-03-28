@@ -24,6 +24,10 @@ export function useMvpWorkflow() {
   const [activeProjectId, setActiveProjectId] = useState("");
 
   const [sessionId, setSessionId] = useState(null);
+  const [projectSessions, setProjectSessions] = useState([]);
+  const [selectedProjectSessionId, setSelectedProjectSessionId] = useState("");
+  const [selectedProjectSessionDetail, setSelectedProjectSessionDetail] = useState(null);
+  const [selectedProjectSessionWorkflow, setSelectedProjectSessionWorkflow] = useState(null);
   const [responses, setResponses] = useState([]);
   const [chatMessages, setChatMessages] = useState([]);
   const [interviewStatus, setInterviewStatus] = useState("idle");
@@ -35,6 +39,7 @@ export function useMvpWorkflow() {
   const [analysisAssistantInput, setAnalysisAssistantInput] = useState("");
   const [analysisAssistantBusy, setAnalysisAssistantBusy] = useState(false);
   const [positioning, setPositioning] = useState(null);
+  const [positioningHistory, setPositioningHistory] = useState([]);
   const [positioningFeedback, setPositioningFeedback] = useState("");
   const [research, setResearch] = useState(null);
   const [personas, setPersonas] = useState([]);
@@ -66,6 +71,18 @@ export function useMvpWorkflow() {
   }, []);
 
   useEffect(() => {
+    if (!activeProjectId) {
+      setProjectSessions([]);
+      setSelectedProjectSessionId("");
+      setSelectedProjectSessionDetail(null);
+      setSelectedProjectSessionWorkflow(null);
+      return;
+    }
+    actions.loadProjectSessions(String(activeProjectId));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeProjectId]);
+
+  useEffect(() => {
     if (!msg || msg.endsWith("...")) return;
     const toast = {
       id: `${Date.now()}-${Math.random()}`,
@@ -73,10 +90,6 @@ export function useMvpWorkflow() {
       type: /failed|error|cannot|not found|required/i.test(msg) ? "error" : "success",
     };
     setToasts((prev) => [toast, ...prev].slice(0, 4));
-    const t = setTimeout(() => {
-      setToasts((prev) => prev.filter((x) => x.id !== toast.id));
-    }, 3200);
-    return () => clearTimeout(t);
   }, [msg]);
 
   const run = async (fn, loadingMsg = "Working...") => {
@@ -91,6 +104,15 @@ export function useMvpWorkflow() {
     } finally {
       setBusy(false);
     }
+  };
+
+  const refreshSelectedSessionWorkflow = async (sessionIdOverride = "") => {
+    const normalized = String(sessionIdOverride || selectedProjectSessionId || "");
+    if (!normalized) return;
+    const workflowSummary = await questionnaireClient.getSessionWorkflowSummary(
+      Number(normalized)
+    );
+    setSelectedProjectSessionWorkflow(workflowSummary);
   };
 
   const actions = {
@@ -124,6 +146,10 @@ export function useMvpWorkflow() {
       setProjects([]);
       setActiveProjectId("");
       setSessionId(null);
+      setProjectSessions([]);
+      setSelectedProjectSessionId("");
+      setSelectedProjectSessionDetail(null);
+      setSelectedProjectSessionWorkflow(null);
       setResponses([]);
       setChatMessages([]);
       setInterviewStatus("idle");
@@ -133,6 +159,7 @@ export function useMvpWorkflow() {
       setAnalysisAssistantMessages([]);
       setAnalysisAssistantInput("");
       setPositioning(null);
+      setPositioningHistory([]);
       setResearch(null);
       setPersonas([]);
       setStrategy(null);
@@ -177,6 +204,7 @@ export function useMvpWorkflow() {
         setSessionId(data.id);
         const session = await questionnaireClient.getSession(data.id);
         setResponses(session.responses || []);
+        await actions.loadProjectSessions(String(activeProjectId), String(data.id));
         setMsg(`Questionnaire session started (#${data.id}) with default profile questions.`);
       }, "Starting session..."),
 
@@ -189,6 +217,7 @@ export function useMvpWorkflow() {
         setInterviewStatus(data.status || "in_progress");
         setInterviewCoverage(null);
         setInterviewAnalysis(null);
+        await actions.loadProjectSessions(String(activeProjectId), String(data.session_id));
         setMsg("Business interview chat started.");
       }, "Starting chatbot..."),
 
@@ -240,6 +269,7 @@ export function useMvpWorkflow() {
         const data = await questionnaireClient.chatFinish(sessionId, force);
         setInterviewStatus(data.status || "completed");
         setInterviewCoverage(data.coverage || null);
+        await refreshSelectedSessionWorkflow(String(sessionId));
         const missing = data.missing_topics || [];
         if (missing.length) {
           setMsg(`Interview finished. Missing topics: ${missing.join(", ")}`);
@@ -255,6 +285,45 @@ export function useMvpWorkflow() {
         setResponses(data.responses || []);
         setMsg("Session loaded.");
       }, "Loading session..."),
+
+    loadProjectSessions: async (projectIdOverride = "", preferredSessionId = "") =>
+      run(async () => {
+        const projectId = Number(projectIdOverride || activeProjectId);
+        if (!projectId) throw new Error("Select business profile first");
+        const data = await questionnaireClient.listSessionsByBusinessProfile(projectId);
+        const items = data.items || [];
+        setProjectSessions(items);
+        const nextSessionId = String(preferredSessionId || data.latest_session_id || items[0]?.id || "");
+        setSelectedProjectSessionId(nextSessionId);
+        if (nextSessionId) {
+          const [detail, workflowSummary] = await Promise.all([
+            questionnaireClient.getSession(Number(nextSessionId)),
+            questionnaireClient.getSessionWorkflowSummary(Number(nextSessionId)),
+          ]);
+          setSelectedProjectSessionDetail(detail);
+          setSelectedProjectSessionWorkflow(workflowSummary);
+        } else {
+          setSelectedProjectSessionDetail(null);
+          setSelectedProjectSessionWorkflow(null);
+        }
+      }, "Loading business profile sessions..."),
+
+    selectProjectSession: async (nextSessionId) =>
+      run(async () => {
+        const normalized = String(nextSessionId || "");
+        setSelectedProjectSessionId(normalized);
+        if (!normalized) {
+          setSelectedProjectSessionDetail(null);
+          setSelectedProjectSessionWorkflow(null);
+          return;
+        }
+        const [detail, workflowSummary] = await Promise.all([
+          questionnaireClient.getSession(Number(normalized)),
+          questionnaireClient.getSessionWorkflowSummary(Number(normalized)),
+        ]);
+        setSelectedProjectSessionDetail(detail);
+        setSelectedProjectSessionWorkflow(workflowSummary);
+      }, "Loading session details..."),
 
     generateNextQuestions: async () =>
       run(async () => {
@@ -302,6 +371,7 @@ export function useMvpWorkflow() {
           assistantContext
         );
         setAnalysis(data.report);
+        await refreshSelectedSessionWorkflow();
         setMsg(
           assistantContext
             ? "Analysis regenerated using discovery responses and assistant context."
@@ -366,6 +436,8 @@ export function useMvpWorkflow() {
       run(async () => {
         const data = await pipelineClient.generatePositioning(Number(activeProjectId));
         setPositioning(data.positioning);
+        setPositioningHistory((prev) => [data.positioning, ...prev]);
+        await refreshSelectedSessionWorkflow();
         setMsg("Positioning generated.");
       }, "Generating positioning..."),
 
@@ -377,14 +449,25 @@ export function useMvpWorkflow() {
           positioningFeedback
         );
         setPositioning(data.positioning);
+        setPositioningHistory((prev) => [data.positioning, ...prev]);
         setPositioningFeedback("");
+        await refreshSelectedSessionWorkflow();
         setMsg("Positioning refined.");
       }, "Refining positioning..."),
+
+    loadPositioningHistory: async () =>
+      run(async () => {
+        if (!activeProjectId) throw new Error("Select business profile first");
+        const items = await pipelineClient.listPositioning(Number(activeProjectId));
+        setPositioningHistory(items);
+        setPositioning(items[0] || null);
+      }, "Loading positioning history..."),
 
     runResearch: async () =>
       run(async () => {
         const data = await pipelineClient.runResearch(Number(activeProjectId));
         setResearch(data.report);
+        await refreshSelectedSessionWorkflow();
         setMsg("Research generated.");
       }, "Generating research..."),
 
@@ -392,6 +475,7 @@ export function useMvpWorkflow() {
       run(async () => {
         const data = await pipelineClient.generatePersonas(Number(activeProjectId));
         setPersonas(data.personas || []);
+        await refreshSelectedSessionWorkflow();
         setMsg("Personas generated.");
       }, "Generating personas..."),
 
@@ -399,6 +483,7 @@ export function useMvpWorkflow() {
       run(async () => {
         const data = await pipelineClient.generateStrategy(Number(activeProjectId));
         setStrategy(data.strategy);
+        await refreshSelectedSessionWorkflow();
         setMsg("Channel strategy generated.");
       }, "Generating strategy..."),
 
@@ -406,6 +491,7 @@ export function useMvpWorkflow() {
       run(async () => {
         const data = await pipelineClient.generateRoadmap(Number(activeProjectId));
         setRoadmap(data.roadmap);
+        await refreshSelectedSessionWorkflow();
         setMsg("Roadmap generated.");
       }, "Generating roadmap..."),
 
@@ -418,6 +504,7 @@ export function useMvpWorkflow() {
           num_variants: Number(numVariants),
         });
         setContentAssets(data.assets || []);
+        await refreshSelectedSessionWorkflow();
         setMsg("Content assets generated.");
       }, "Generating content assets..."),
 
@@ -445,6 +532,10 @@ export function useMvpWorkflow() {
       activeProjectId,
       activeProject,
       sessionId,
+      projectSessions,
+      selectedProjectSessionId,
+      selectedProjectSessionDetail,
+      selectedProjectSessionWorkflow,
       responses,
       chatMessages,
       interviewStatus,
@@ -456,6 +547,7 @@ export function useMvpWorkflow() {
       analysisAssistantMessages,
       analysisAssistantInput,
       positioning,
+      positioningHistory,
       positioningFeedback,
       research,
       personas,
@@ -474,6 +566,7 @@ export function useMvpWorkflow() {
       setProjectDescription,
       setProjectBusinessAddress,
       setActiveProjectId,
+      setSelectedProjectSessionId,
       setPositioningFeedback,
       setAssetType,
       setAssetPrompt,

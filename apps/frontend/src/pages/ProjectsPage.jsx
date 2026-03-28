@@ -29,6 +29,12 @@ export default function ProjectsPage({ workflow }) {
         setActiveProjectId={set.setActiveProjectId}
         projects={state.projects}
         activeProject={state.activeProject}
+        projectSessions={state.projectSessions}
+        selectedProjectSessionId={state.selectedProjectSessionId}
+        setSelectedProjectSessionId={set.setSelectedProjectSessionId}
+        selectProjectSession={actions.selectProjectSession}
+        selectedProjectSessionDetail={state.selectedProjectSessionDetail}
+        selectedProjectSessionWorkflow={state.selectedProjectSessionWorkflow}
       />
       {!state.activeProjectId && (
         <EmptyState

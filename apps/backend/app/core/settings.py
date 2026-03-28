@@ -5,7 +5,7 @@ class Settings(BaseSettings):
     openai_api_key: str
     openai_model: str = "gpt-4o-mini"
     openai_base_url: str = "https://us.api.openai.com/v1"
-    database_url: str = "postgresql+psycopg://postgres:postgres@localhost:5432/test_db"
+    database_url: str = "postgresql+psycopg://postgres:postgres@localhost:5432/aimarketing"
     app_env: str = "dev"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")

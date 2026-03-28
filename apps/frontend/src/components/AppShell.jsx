@@ -3,10 +3,10 @@ import { NavLink, useLocation } from "react-router-dom";
 const links = [
   ["Business Profile", "/projects"],
   ["Marketing Discovery", "/questionnaire"],
-  ["Analysis", "/analysis"],
+  ["Competitive Benchmarking", "/analysis"],
   ["Positioning", "/positioning"],
-  ["Research", "/research"],
   ["Personas", "/personas"],
+  ["Research", "/research"],
   ["Strategy", "/strategy"],
   ["Roadmap", "/roadmap"],
   ["Content Studio", "/content"],
@@ -18,7 +18,7 @@ const stepDescriptions = {
   "/questionnaire":
     "Run the marketing discovery interview to capture business, customer, and growth context.",
   "/analysis":
-    "Review segment attractiveness insights across market size, competition, fit, and profitability.",
+    "Benchmark competitors in your local area — pricing, services, business model, discounts, reviews, and market size.",
   "/positioning":
     "Generate and refine a positioning statement aligned with your strongest target segment.",
   "/research":

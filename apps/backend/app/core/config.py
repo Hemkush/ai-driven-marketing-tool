@@ -32,6 +32,8 @@ class Settings:
         "OPENAI_EMBEDDING_MODEL", "text-embedding-3-small"
     )
     memory_top_k: int = int(os.getenv("MEMORY_TOP_K", "6"))
+    google_places_api_key: str | None = os.getenv("GOOGLE_PLACES_API_KEY")
+    benchmarking_radius_meters: int = int(os.getenv("BENCHMARKING_RADIUS_METERS", "5000"))
 
     def validate_openai(self) -> None:
         if not self.openai_api_key:

@@ -4,25 +4,47 @@ import { LoadingSkeleton } from "../components/LoadingSkeleton";
 
 export default function PersonasPage({ workflow }) {
   const { state, actions } = workflow;
+  const hasPersonas = state.personas.length > 0;
+
   return (
     <div>
-      <ActionRow>
-        <button className="btn" onClick={actions.generatePersonas} disabled={state.busy || !state.activeProjectId}>
-          Generate Personas
-        </button>
-      </ActionRow>
-      {state.busy && <LoadingSkeleton lines={5} />}
-      {!state.busy && state.personas.length > 0 && <PersonaCards personas={state.personas} />}
-      {!state.busy && state.personas.length === 0 && (
+      {/* Header */}
+      <div className="positioning-page-header">
+        <div>
+          <h3 className="positioning-page-title">Buyer Personas</h3>
+          <p className="positioning-page-desc">
+            AI builds detailed buyer personas from your competitive benchmarking data and positioning statement —
+            covering goals, pain points, behaviour, channels, and the exact messages that convert each type.
+          </p>
+        </div>
+        <ActionRow>
+          <button
+            className="btn"
+            onClick={actions.generatePersonas}
+            disabled={state.busy || !state.activeProjectId}
+          >
+            {hasPersonas ? "Regenerate Personas" : "Generate Personas"}
+          </button>
+        </ActionRow>
+      </div>
+
+      {state.busy && <LoadingSkeleton lines={6} />}
+
+      {!state.busy && hasPersonas && (
+        <PersonaCards personas={state.personas} />
+      )}
+
+      {!state.busy && !hasPersonas && (
         <EmptyState
           glyph="◕"
-          title="No Personas Generated"
-          description="Generate buyer personas to drive channel strategy and message targeting."
+          title="No Personas Yet"
+          description="Complete Competitive Benchmarking and Positioning first, then click Generate Personas. The AI will build personas specific to your business type and local market."
         />
       )}
+
       <NextStepCta
-        to="/strategy"
-        label="Next: Strategy"
+        to="/research"
+        label="Next: Research"
         disabled={state.personas.length === 0}
       />
     </div>

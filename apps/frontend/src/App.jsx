@@ -1,8 +1,9 @@
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { useEffect } from "react";
 import AppShell from "./components/AppShell";
-import AuthPanel from "./components/AuthPanel";
 import ToastStack from "./components/ToastStack";
+import LandingPage from "./pages/LandingPage";
+import LoginPage from "./pages/LoginPage";
 import AnalysisPage from "./pages/AnalysisPage";
 import ContentPage from "./pages/ContentPage";
 import PersonasPage from "./pages/PersonasPage";
@@ -16,42 +17,34 @@ import { useMvpWorkflow } from "./state/useMvpWorkflow";
 
 export default function App() {
   const workflow = useMvpWorkflow();
-  const { state, set, actions } = workflow;
+  const { state, actions } = workflow;
   const navigate = useNavigate();
   const location = useLocation();
+  const sessionProgress = state.selectedProjectSessionWorkflow?.progress || {};
   const progress = {
     "/projects": Boolean(state.activeProjectId),
-    "/questionnaire": Boolean(state.interviewCompleted),
-    "/analysis": Boolean(state.analysis),
-    "/positioning": Boolean(state.positioning),
-    "/research": Boolean(state.research),
-    "/personas": Boolean(state.personas.length),
-    "/strategy": Boolean(state.strategy),
-    "/roadmap": Boolean(state.roadmap),
-    "/content": Boolean(state.contentAssets.length),
+    "/questionnaire": sessionProgress["/questionnaire"] ?? Boolean(state.interviewCompleted),
+    "/analysis": sessionProgress["/analysis"] ?? Boolean(state.analysis),
+    "/positioning": sessionProgress["/positioning"] ?? Boolean(state.positioning),
+    "/personas": sessionProgress["/personas"] ?? Boolean(state.personas.length),
+    "/research": sessionProgress["/research"] ?? Boolean(state.research),
+    "/strategy": sessionProgress["/strategy"] ?? Boolean(state.strategy),
+    "/roadmap": sessionProgress["/roadmap"] ?? Boolean(state.roadmap),
+    "/content": sessionProgress["/content"] ?? Boolean(state.contentAssets.length),
   };
 
   useEffect(() => {
-    if (!state.me && location.pathname !== "/") {
+    // Redirect unauthenticated users away from protected app routes
+    if (!state.me && location.pathname !== "/" && location.pathname !== "/login") {
       navigate("/", { replace: true });
     }
   }, [state.me, location.pathname, navigate]);
 
   if (!state.me) {
-    return (
-      <AuthPanel
-        companyName={state.companyName}
-        setCompanyName={set.setCompanyName}
-        email={state.email}
-        setEmail={set.setEmail}
-        password={state.password}
-        setPassword={set.setPassword}
-        register={actions.register}
-        login={actions.login}
-        busy={state.busy}
-        msg={state.msg}
-      />
-    );
+    if (location.pathname === "/login") {
+      return <LoginPage workflow={workflow} />;
+    }
+    return <LandingPage workflow={workflow} />;
   }
 
   return (
@@ -59,6 +52,7 @@ export default function App() {
       <ToastStack toasts={state.toasts} onDismiss={actions.dismissToast} />
       <Routes>
         <Route path="/" element={<Navigate to="/projects" replace />} />
+        <Route path="/login" element={<Navigate to="/projects" replace />} />
         <Route path="/projects" element={<ProjectsPage workflow={workflow} />} />
         <Route path="/questionnaire" element={<QuestionnairePage workflow={workflow} />} />
         <Route path="/analysis" element={<AnalysisPage workflow={workflow} />} />

@@ -43,7 +43,7 @@ export default function QuestionnairePage({ workflow }) {
         <EmptyState
           glyph="OK"
           title="Interview Completed"
-          description="Go to Analysis page and run segment attractiveness analysis."
+          description="Go to Competitive Benchmarking and run your local competitor analysis."
         />
       )}
     </div>

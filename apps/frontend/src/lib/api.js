@@ -23,3 +23,15 @@ export function initAuthToken() {
   }
   return token;
 }
+
+// Auto-clear expired/invalid tokens and redirect to login
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      setAuthToken(null);
+      window.location.href = "/";
+    }
+    return Promise.reject(error);
+  }
+);

@@ -1,6 +1,7 @@
 import json
 import re
 from difflib import SequenceMatcher
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
@@ -33,7 +34,8 @@ from app.services.persona_builder import generate_personas
 from app.services.channel_strategy_planner import generate_channel_strategy
 from app.services.roadmap_planner import generate_roadmap_plan
 from app.services.content_studio import generate_content_assets
-from app.services.segment_analyst import analyze_segments, answer_analysis_question
+from app.services.segment_analyst import answer_analysis_question
+from app.services.competitive_benchmarker import run_competitive_benchmarking
 from app.services.memory_store import retrieve_relevant_memory, store_response_memory
 
 router = APIRouter(prefix="/api/mvp", tags=["mvp"])
@@ -209,6 +211,54 @@ def _latest_analysis_or_404(db: Session, project_id: int) -> AnalysisReport:
             detail="No analysis report found. Run /api/mvp/analysis/run first.",
         )
     return report
+
+
+def _latest_session_for_project(
+    db: Session, project_id: int
+) -> QuestionnaireSession | None:
+    return (
+        db.query(QuestionnaireSession)
+        .filter(QuestionnaireSession.project_id == project_id)
+        .order_by(QuestionnaireSession.updated_at.desc(), QuestionnaireSession.id.desc())
+        .first()
+    )
+
+
+def _next_session_after(
+    db: Session, project_id: int, created_at: datetime
+) -> QuestionnaireSession | None:
+    return (
+        db.query(QuestionnaireSession)
+        .filter(
+            QuestionnaireSession.project_id == project_id,
+            QuestionnaireSession.created_at > created_at,
+        )
+        .order_by(QuestionnaireSession.created_at.asc(), QuestionnaireSession.id.asc())
+        .first()
+    )
+
+
+def _artifact_for_session(db: Session, model, project_id: int, session: QuestionnaireSession):
+    exact = (
+        db.query(model)
+        .filter(
+            model.project_id == project_id,
+            model.source_session_id == session.id,
+        )
+        .order_by(model.id.desc())
+        .first()
+    )
+    if exact:
+        return exact
+
+    next_session = _next_session_after(db, project_id, session.created_at)
+    query = db.query(model).filter(
+        model.project_id == project_id,
+        model.created_at >= session.created_at,
+    )
+    if next_session:
+        query = query.filter(model.created_at < next_session.created_at)
+    return query.order_by(model.created_at.desc(), model.id.desc()).first()
 
 
 def _load_question_options(raw: str | None) -> list[str]:
@@ -400,6 +450,240 @@ def _chat_topic_coverage(responses: list[QuestionnaireResponse]) -> dict:
     return {topic: any(k in text for k in keys) for topic, keys in checks.items()}
 
 
+def _safe_json_object(raw: str | None) -> dict:
+    if not raw:
+        return {}
+    try:
+        parsed = json.loads(raw)
+        return parsed if isinstance(parsed, dict) else {}
+    except Exception:
+        return {}
+
+
+def _serialize_positioning_row(row: PositioningStatement) -> dict:
+    payload = _safe_json_object(row.payload_json)
+    merged = {
+        "target_segment": payload.get("target_segment", ""),
+        "positioning_statement": payload.get("positioning_statement", row.statement_text),
+        "tagline": payload.get("tagline", ""),
+        "key_differentiators": payload.get("key_differentiators", []),
+        "proof_points": payload.get("proof_points", []),
+        "rationale": payload.get("rationale", row.rationale),
+    }
+    return {
+        **merged,
+        "id": row.id,
+        "business_profile_id": row.project_id,
+        "project_id": row.project_id,
+        "version": row.version,
+        "created_at": row.created_at.isoformat(),
+        "source_session_id": row.source_session_id,
+    }
+
+
+def _serialize_analysis_report_row(row: AnalysisReport | None) -> dict | None:
+    if not row:
+        return None
+    return {
+        "analysis_report_id": row.id,
+        "business_profile_id": row.project_id,
+        "project_id": row.project_id,
+        "status": row.status,
+        "report": json.loads(row.report_json),
+        "created_at": row.created_at.isoformat(),
+        "updated_at": row.updated_at.isoformat(),
+        "source_session_id": row.source_session_id,
+    }
+
+
+def _serialize_research_report_row(row: ResearchReport | None) -> dict | None:
+    if not row:
+        return None
+    return {
+        "research_report_id": row.id,
+        "business_profile_id": row.project_id,
+        "project_id": row.project_id,
+        "status": row.status,
+        "report": json.loads(row.report_json),
+        "created_at": row.created_at.isoformat(),
+        "source_session_id": row.source_session_id,
+    }
+
+
+def _serialize_persona_row(row: PersonaProfile) -> dict:
+    return {
+        "id": row.id,
+        "name": row.persona_name,
+        "profile": json.loads(row.persona_json),
+        "created_at": row.created_at.isoformat(),
+        "source_session_id": row.source_session_id,
+    }
+
+
+def _serialize_strategy_row(row: ChannelStrategy | None) -> dict | None:
+    if not row:
+        return None
+    return {
+        "channel_strategy_id": row.id,
+        "business_profile_id": row.project_id,
+        "project_id": row.project_id,
+        "strategy": json.loads(row.strategy_json),
+        "created_at": row.created_at.isoformat(),
+        "source_session_id": row.source_session_id,
+    }
+
+
+def _serialize_roadmap_row(row: RoadmapPlan | None) -> dict | None:
+    if not row:
+        return None
+    return {
+        "roadmap_plan_id": row.id,
+        "business_profile_id": row.project_id,
+        "project_id": row.project_id,
+        "roadmap": json.loads(row.plan_json),
+        "created_at": row.created_at.isoformat(),
+        "source_session_id": row.source_session_id,
+    }
+
+
+def _serialize_asset_row(row: MediaAsset) -> dict:
+    return {
+        "id": row.id,
+        "asset_type": row.asset_type,
+        "storage_uri": row.storage_uri,
+        "prompt_text": row.prompt_text,
+        "metadata": json.loads(row.metadata_json),
+        "status": row.status,
+        "created_at": row.created_at.isoformat(),
+        "source_session_id": row.source_session_id,
+    }
+
+
+def _serialize_session_summary(
+    session: QuestionnaireSession, responses: list[QuestionnaireResponse]
+) -> dict:
+    answered = [r for r in responses if (r.answer_text or "").strip()]
+    latest_answered = answered[-1] if answered else None
+    latest_question = responses[-1] if responses else None
+    return {
+        "id": session.id,
+        "business_profile_id": session.project_id,
+        "project_id": session.project_id,
+        "status": session.status,
+        "created_at": session.created_at.isoformat(),
+        "updated_at": session.updated_at.isoformat(),
+        "response_count": len(responses),
+        "answered_count": len(answered),
+        "latest_answered_question": latest_answered.question_text if latest_answered else "",
+        "latest_answer_excerpt": (
+            " ".join((latest_answered.answer_text or "").split())[:180]
+            if latest_answered
+            else ""
+        ),
+        "current_question": latest_question.question_text if latest_question else "",
+    }
+
+
+def _build_session_workflow_snapshot(
+    db: Session, project: Project, session: QuestionnaireSession
+) -> dict:
+    response_rows = (
+        db.query(QuestionnaireResponse)
+        .filter(QuestionnaireResponse.session_id == session.id)
+        .order_by(QuestionnaireResponse.sequence_no.asc())
+        .all()
+    )
+    answered_rows = [row for row in response_rows if (row.answer_text or "").strip()]
+    response_payload = [
+        {
+            "question_text": row.question_text,
+            "answer_text": row.answer_text,
+            "question_type": row.question_type,
+            "source": row.source,
+        }
+        for row in answered_rows
+    ]
+    conversation_analysis = (
+        analyze_chat_response(
+            response_payload,
+            business_context={"business_location": project.business_address},
+        )
+        if response_payload
+        else None
+    )
+
+    analysis_row = _artifact_for_session(db, AnalysisReport, project.id, session)
+    positioning_row = _artifact_for_session(db, PositioningStatement, project.id, session)
+    research_row = _artifact_for_session(db, ResearchReport, project.id, session)
+    strategy_row = _artifact_for_session(db, ChannelStrategy, project.id, session)
+    roadmap_row = _artifact_for_session(db, RoadmapPlan, project.id, session)
+
+    persona_rows = (
+        db.query(PersonaProfile)
+        .filter(
+            PersonaProfile.project_id == project.id,
+            PersonaProfile.source_session_id == session.id,
+        )
+        .order_by(PersonaProfile.id.asc())
+        .all()
+    )
+    if not persona_rows:
+        next_session = _next_session_after(db, project.id, session.created_at)
+        persona_query = db.query(PersonaProfile).filter(
+            PersonaProfile.project_id == project.id,
+            PersonaProfile.created_at >= session.created_at,
+        )
+        if next_session:
+            persona_query = persona_query.filter(PersonaProfile.created_at < next_session.created_at)
+        persona_rows = persona_query.order_by(PersonaProfile.id.asc()).all()
+
+    content_rows = (
+        db.query(MediaAsset)
+        .filter(
+            MediaAsset.project_id == project.id,
+            MediaAsset.source_session_id == session.id,
+        )
+        .order_by(MediaAsset.id.desc())
+        .all()
+    )
+    if not content_rows:
+        next_session = _next_session_after(db, project.id, session.created_at)
+        content_query = db.query(MediaAsset).filter(
+            MediaAsset.project_id == project.id,
+            MediaAsset.created_at >= session.created_at,
+        )
+        if next_session:
+            content_query = content_query.filter(MediaAsset.created_at < next_session.created_at)
+        content_rows = content_query.order_by(MediaAsset.id.desc()).all()
+
+    snapshot = {
+        "conversation_analysis": conversation_analysis,
+        "analysis": _serialize_analysis_report_row(analysis_row),
+        "positioning": _serialize_positioning_row(positioning_row) if positioning_row else None,
+        "research": _serialize_research_report_row(research_row),
+        "personas": [_serialize_persona_row(row) for row in persona_rows],
+        "strategy": _serialize_strategy_row(strategy_row),
+        "roadmap": _serialize_roadmap_row(roadmap_row),
+        "content_assets": [_serialize_asset_row(row) for row in content_rows],
+    }
+    progress = {
+        "/projects": True,
+        "/questionnaire": session.status == "completed",
+        "/analysis": bool(snapshot["analysis"]),
+        "/positioning": bool(snapshot["positioning"]),
+        "/research": bool(snapshot["research"]),
+        "/personas": bool(snapshot["personas"]),
+        "/strategy": bool(snapshot["strategy"]),
+        "/roadmap": bool(snapshot["roadmap"]),
+        "/content": bool(snapshot["content_assets"]),
+    }
+    return {
+        "session": _serialize_session_summary(session, response_rows),
+        "snapshot": snapshot,
+        "progress": progress,
+    }
+
+
 @router.get("/system/registry")
 def get_system_registry():
     return {"agents": AGENT_REGISTRY, "mcp_servers": MCP_REGISTRY}
@@ -502,7 +786,60 @@ def get_questionnaire_session(
         "business_profile_id": session.project_id,
         "project_id": session.project_id,
         "status": session.status,
+        "created_at": session.created_at.isoformat(),
+        "updated_at": session.updated_at.isoformat(),
         "responses": [_serialize_response(r) for r in responses],
+    }
+
+
+@router.get("/questionnaire/sessions/by-business-profile/{project_id}")
+def list_questionnaire_sessions_for_project(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _owned_project_or_404(db, current_user, project_id)
+    sessions = (
+        db.query(QuestionnaireSession)
+        .filter(QuestionnaireSession.project_id == project_id)
+        .order_by(QuestionnaireSession.updated_at.desc(), QuestionnaireSession.id.desc())
+        .all()
+    )
+
+    items = []
+    for session in sessions:
+        responses = (
+            db.query(QuestionnaireResponse)
+            .filter(QuestionnaireResponse.session_id == session.id)
+            .order_by(QuestionnaireResponse.sequence_no.asc())
+            .all()
+        )
+        items.append(_serialize_session_summary(session, responses))
+
+    latest = items[0] if items else None
+    return {
+        "items": items,
+        "latest_session_id": latest["id"] if latest else None,
+    }
+
+
+@router.get("/workflow/session-summary/{session_id}")
+def get_session_workflow_summary(
+    session_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    session = db.get(QuestionnaireSession, session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    project = _owned_project_or_404(db, current_user, session.project_id)
+    payload = _build_session_workflow_snapshot(db, project, session)
+    return {
+        "business_profile_id": project.id,
+        "project_id": project.id,
+        "business_profile_name": project.name,
+        "business_location": project.business_address,
+        **payload,
     }
 
 
@@ -630,6 +967,7 @@ def reply_questionnaire_chat(
         answered_payload,
         business_context={"business_location": project.business_address},
     )
+    session.conversation_analysis_json = json.dumps(analysis_payload)
 
     existing_questions = [r.question_text for r in responses]
     next_question = generate_next_chat_question(answered_payload)
@@ -947,6 +1285,7 @@ def run_analysis_contract(
         payload.business_profile_id, payload.project_id
     )
     project = _owned_project_or_404(db, current_user, business_profile_id)
+    source_session = _latest_session_for_project(db, business_profile_id)
     sessions = (
         db.query(QuestionnaireSession)
         .filter(QuestionnaireSession.project_id == business_profile_id)
@@ -975,12 +1314,22 @@ def run_analysis_contract(
                 "answer_text": extra_context,
             }
         )
-    report_payload = analyze_segments(
-        response_payload, business_address=project.business_address
+    conversation_analysis = None
+    if source_session and source_session.conversation_analysis_json:
+        try:
+            conversation_analysis = json.loads(source_session.conversation_analysis_json)
+        except Exception:
+            pass
+
+    report_payload = run_competitive_benchmarking(
+        response_payload,
+        business_address=project.business_address,
+        conversation_analysis=conversation_analysis,
     )
 
     report = AnalysisReport(
         project_id=business_profile_id,
+        source_session_id=source_session.id if source_session else None,
         status="ready",
         report_json=json.dumps(report_payload),
     )
@@ -995,6 +1344,7 @@ def run_analysis_contract(
         "report": report_payload,
         "business_location": project.business_address or "",
         "used_additional_context": bool(extra_context),
+        "source_session_id": report.source_session_id,
     }
 
 
@@ -1065,14 +1415,7 @@ def get_latest_analysis(
     )
     if not report:
         raise HTTPException(status_code=404, detail="No analysis report found")
-    return {
-        "analysis_report_id": report.id,
-        "business_profile_id": project_id,
-        "project_id": project_id,
-        "status": report.status,
-        "report": json.loads(report.report_json),
-        "created_at": report.created_at.isoformat(),
-    }
+    return _serialize_analysis_report_row(report)
 
 
 @router.post("/positioning/generate", status_code=status.HTTP_201_CREATED)
@@ -1095,9 +1438,11 @@ def generate_positioning_contract(
     positioning_payload = generate_positioning(analysis_payload)
     row = PositioningStatement(
         project_id=business_profile_id,
+        source_session_id=analysis_report.source_session_id,
         version=existing_count + 1,
         statement_text=positioning_payload["positioning_statement"],
         rationale=positioning_payload.get("rationale", ""),
+        payload_json=json.dumps(positioning_payload),
     )
     db.add(row)
     db.commit()
@@ -1107,12 +1452,7 @@ def generate_positioning_contract(
         "business_profile_id": business_profile_id,
         "project_id": business_profile_id,
         "version": row.version,
-        "positioning": {
-            **positioning_payload,
-            "id": row.id,
-            "version": row.version,
-            "created_at": row.created_at.isoformat(),
-        },
+        "positioning": _serialize_positioning_row(row),
     }
 
 
@@ -1139,9 +1479,11 @@ def refine_positioning_contract(
     )
     row = PositioningStatement(
         project_id=business_profile_id,
+        source_session_id=analysis_report.source_session_id,
         version=existing_count + 1,
         statement_text=positioning_payload["positioning_statement"],
         rationale=positioning_payload.get("rationale", ""),
+        payload_json=json.dumps(positioning_payload),
     )
     db.add(row)
     db.commit()
@@ -1152,12 +1494,7 @@ def refine_positioning_contract(
         "agent_id": "positioning_copilot",
         "status": "ready",
         "feedback_received": True,
-        "positioning": {
-            **positioning_payload,
-            "id": row.id,
-            "version": row.version,
-            "created_at": row.created_at.isoformat(),
-        },
+        "positioning": _serialize_positioning_row(row),
     }
 
 
@@ -1178,14 +1515,25 @@ def get_latest_positioning(
     if not row:
         raise HTTPException(status_code=404, detail="No positioning statement found")
 
+    return _serialize_positioning_row(row)
+
+
+@router.get("/positioning/{project_id}")
+@router.get("/positioning/by-business-profile/{project_id}")
+def list_positioning_versions(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _owned_project_or_404(db, current_user, project_id)
+    rows = (
+        db.query(PositioningStatement)
+        .filter(PositioningStatement.project_id == project_id)
+        .order_by(PositioningStatement.version.desc(), PositioningStatement.id.desc())
+        .all()
+    )
     return {
-        "id": row.id,
-        "business_profile_id": row.project_id,
-        "project_id": row.project_id,
-        "version": row.version,
-        "positioning_statement": row.statement_text,
-        "rationale": row.rationale,
-        "created_at": row.created_at.isoformat(),
+        "items": [_serialize_positioning_row(row) for row in rows]
     }
 
 
@@ -1238,19 +1586,14 @@ def run_research_contract(
 
     report = ResearchReport(
         project_id=business_profile_id,
+        source_session_id=analysis_report.source_session_id,
         status="ready",
         report_json=json.dumps(research_payload),
     )
     db.add(report)
     db.commit()
     db.refresh(report)
-    return {
-        "research_report_id": report.id,
-        "business_profile_id": business_profile_id,
-        "project_id": business_profile_id,
-        "status": report.status,
-        "report": research_payload,
-    }
+    return _serialize_research_report_row(report)
 
 
 @router.get("/research/latest/{project_id}")
@@ -1269,14 +1612,7 @@ def get_latest_research(
     )
     if not report:
         raise HTTPException(status_code=404, detail="No research report found")
-    return {
-        "research_report_id": report.id,
-        "business_profile_id": project_id,
-        "project_id": project_id,
-        "status": report.status,
-        "report": json.loads(report.report_json),
-        "created_at": report.created_at.isoformat(),
-    }
+    return _serialize_research_report_row(report)
 
 
 @router.post("/personas/generate", status_code=status.HTTP_201_CREATED)
@@ -1290,32 +1626,39 @@ def generate_personas_contract(
     )
     project = _owned_project_or_404(db, current_user, business_profile_id)
     analysis_row = _latest_analysis_or_404(db, business_profile_id)
-    research_row = (
-        db.query(ResearchReport)
-        .filter(ResearchReport.project_id == business_profile_id)
-        .order_by(ResearchReport.id.desc())
+
+    # Use latest positioning statement if available (optional enrichment)
+    positioning_row = (
+        db.query(PositioningStatement)
+        .filter(PositioningStatement.project_id == business_profile_id)
+        .order_by(PositioningStatement.id.desc())
         .first()
     )
-    if not research_row:
-        raise HTTPException(
-            status_code=404,
-            detail="No research report found. Run /api/mvp/research/run first.",
-        )
+    positioning_payload = _safe_json_object(positioning_row.payload_json) if positioning_row else None
 
     personas = generate_personas(
         project_name=project.name,
         analysis_report=json.loads(analysis_row.report_json),
-        research_report=json.loads(research_row.report_json),
+        positioning=positioning_payload,
         num_personas=3,
     )
 
-    db.query(PersonaProfile).filter(PersonaProfile.project_id == business_profile_id).delete()
-    db.flush()
-
     created_rows = []
+    source_session_id = analysis_row.source_session_id
+    if source_session_id:
+        (
+            db.query(PersonaProfile)
+            .filter(
+                PersonaProfile.project_id == business_profile_id,
+                PersonaProfile.source_session_id == source_session_id,
+            )
+            .delete()
+        )
+        db.flush()
     for persona in personas:
         row = PersonaProfile(
             project_id=business_profile_id,
+            source_session_id=source_session_id,
             persona_name=persona.get("name", "Unnamed Persona"),
             persona_json=json.dumps(persona),
         )
@@ -1330,12 +1673,7 @@ def generate_personas_contract(
         "project_id": business_profile_id,
         "status": "ready",
         "personas": [
-            {
-                "id": r.id,
-                "name": r.persona_name,
-                "profile": json.loads(r.persona_json),
-                "created_at": r.created_at.isoformat(),
-            }
+            _serialize_persona_row(r)
             for r in created_rows
         ],
     }
@@ -1357,12 +1695,7 @@ def list_personas(
     )
     return {
         "items": [
-            {
-                "id": r.id,
-                "name": r.persona_name,
-                "profile": json.loads(r.persona_json),
-                "created_at": r.created_at.isoformat(),
-            }
+            _serialize_persona_row(r)
             for r in rows
         ]
     }
@@ -1410,18 +1743,14 @@ def generate_channel_strategy_contract(
 
     row = ChannelStrategy(
         project_id=business_profile_id,
+        source_session_id=research_row.source_session_id or persona_rows[0].source_session_id,
         strategy_json=json.dumps(strategy_payload),
     )
     db.add(row)
     db.commit()
     db.refresh(row)
-    return {
-        "channel_strategy_id": row.id,
-        "business_profile_id": business_profile_id,
-        "project_id": business_profile_id,
-        "status": "ready",
-        "strategy": strategy_payload,
-    }
+    payload = _serialize_strategy_row(row) or {}
+    return {**payload, "status": "ready"}
 
 
 @router.get("/strategy/latest/{project_id}")
@@ -1440,13 +1769,7 @@ def get_latest_strategy(
     )
     if not row:
         raise HTTPException(status_code=404, detail="No channel strategy found")
-    return {
-        "channel_strategy_id": row.id,
-        "business_profile_id": project_id,
-        "project_id": project_id,
-        "strategy": json.loads(row.strategy_json),
-        "created_at": row.created_at.isoformat(),
-    }
+    return _serialize_strategy_row(row)
 
 
 @router.post("/roadmap/generate", status_code=status.HTTP_201_CREATED)
@@ -1491,18 +1814,14 @@ def generate_roadmap_contract(
 
     row = RoadmapPlan(
         project_id=business_profile_id,
+        source_session_id=strategy_row.source_session_id or persona_rows[0].source_session_id,
         plan_json=json.dumps(roadmap_payload),
     )
     db.add(row)
     db.commit()
     db.refresh(row)
-    return {
-        "roadmap_plan_id": row.id,
-        "business_profile_id": business_profile_id,
-        "project_id": business_profile_id,
-        "status": "ready",
-        "roadmap": roadmap_payload,
-    }
+    payload = _serialize_roadmap_row(row) or {}
+    return {**payload, "status": "ready"}
 
 
 @router.get("/roadmap/latest/{project_id}")
@@ -1521,13 +1840,7 @@ def get_latest_roadmap(
     )
     if not row:
         raise HTTPException(status_code=404, detail="No roadmap found")
-    return {
-        "roadmap_plan_id": row.id,
-        "business_profile_id": project_id,
-        "project_id": project_id,
-        "roadmap": json.loads(row.plan_json),
-        "created_at": row.created_at.isoformat(),
-    }
+    return _serialize_roadmap_row(row)
 
 
 @router.post("/content/generate", status_code=status.HTTP_201_CREATED)
@@ -1576,6 +1889,7 @@ def generate_content_contract(
     for item in generated:
         row = MediaAsset(
             project_id=business_profile_id,
+            source_session_id=roadmap_row.source_session_id or strategy_row.source_session_id,
             asset_type=item["asset_type"],
             prompt_text=payload.prompt_text,
             storage_uri=item["storage_uri"],
@@ -1592,17 +1906,7 @@ def generate_content_contract(
         "business_profile_id": business_profile_id,
         "project_id": business_profile_id,
         "generated_count": len(rows),
-        "assets": [
-            {
-                "id": r.id,
-                "asset_type": r.asset_type,
-                "storage_uri": r.storage_uri,
-                "metadata": json.loads(r.metadata_json),
-                "status": r.status,
-                "created_at": r.created_at.isoformat(),
-            }
-            for r in rows
-        ],
+        "assets": [_serialize_asset_row(r) for r in rows],
     }
 
 
@@ -1621,18 +1925,7 @@ def list_content_assets(
         .all()
     )
     return {
-        "items": [
-            {
-                "id": r.id,
-                "asset_type": r.asset_type,
-                "storage_uri": r.storage_uri,
-                "prompt_text": r.prompt_text,
-                "metadata": json.loads(r.metadata_json),
-                "status": r.status,
-                "created_at": r.created_at.isoformat(),
-            }
-            for r in rows
-        ]
+        "items": [_serialize_asset_row(r) for r in rows]
     }
 
 
@@ -1647,13 +1940,7 @@ def get_content_asset(
         raise HTTPException(status_code=404, detail="Asset not found")
     _owned_project_or_404(db, current_user, row.project_id)
     return {
-        "id": row.id,
         "business_profile_id": row.project_id,
         "project_id": row.project_id,
-        "asset_type": row.asset_type,
-        "storage_uri": row.storage_uri,
-        "prompt_text": row.prompt_text,
-        "metadata": json.loads(row.metadata_json),
-        "status": row.status,
-        "created_at": row.created_at.isoformat(),
+        **_serialize_asset_row(row),
     }

@@ -18,6 +18,10 @@ export const questionnaireClient = {
       .then((r) => r.data),
   getSession: (sessionId) =>
     api.get(`/mvp/questionnaire/sessions/${sessionId}`).then((r) => r.data),
+  getSessionWorkflowSummary: (sessionId) =>
+    api.get(`/mvp/workflow/session-summary/${sessionId}`).then((r) => r.data),
+  listSessionsByBusinessProfile: (businessProfileId) =>
+    api.get(`/mvp/questionnaire/sessions/by-business-profile/${businessProfileId}`).then((r) => r.data),
   addResponse: (sessionId, payload) =>
     api.post(`/mvp/questionnaire/sessions/${sessionId}/responses`, payload).then((r) => r.data),
   generateNextQuestions: (sessionId) =>
@@ -77,6 +81,8 @@ export const pipelineClient = {
         owner_feedback: ownerFeedback,
       })
       .then((r) => r.data),
+  listPositioning: (businessProfileId) =>
+    api.get(`/mvp/positioning/${businessProfileId}`).then((r) => r.data.items || []),
   runResearch: (businessProfileId) =>
     api.post("/mvp/research/run", { business_profile_id: businessProfileId }).then((r) => r.data),
   generatePersonas: (businessProfileId) =>
