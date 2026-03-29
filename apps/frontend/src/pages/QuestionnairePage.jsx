@@ -1,12 +1,11 @@
 import QuestionnaireChatPanel from "../components/QuestionnaireChatPanel";
-import { EmptyState } from "../components/UiBlocks";
+import { NextStepCta } from "../components/UiBlocks";
 
 export default function QuestionnairePage({ workflow }) {
   const { state, actions } = workflow;
-  const answeredCount = state.chatMessages.filter((m) => m.role === "user").length;
 
   return (
-    <div>
+    <div className="qp-page">
       <QuestionnaireChatPanel
         startChat={actions.startQuestionnaireChat}
         refreshChat={actions.loadQuestionnaireChat}
@@ -17,34 +16,10 @@ export default function QuestionnairePage({ workflow }) {
         sessionId={state.sessionId}
         messages={state.chatMessages}
         analysis={state.interviewAnalysis}
+        interviewCompleted={state.interviewCompleted}
       />
-      {!state.sessionId && (
-        <EmptyState
-          glyph="*"
-          title="Start the Business Interview"
-          description="Create a chat session to begin with: Tell me about your business."
-        />
-      )}
-      {state.sessionId && state.chatMessages.length === 0 && (
-        <EmptyState
-          glyph="..."
-          title="No Chat Messages Yet"
-          description="Refresh or restart the session to load your first chatbot question."
-        />
-      )}
-      {state.sessionId && answeredCount === 0 && (
-        <EmptyState
-          glyph=">"
-          title="Waiting for Your First Answer"
-          description="Once you answer, the chatbot will generate the next question automatically."
-        />
-      )}
-      {state.interviewCompleted && (
-        <EmptyState
-          glyph="OK"
-          title="Interview Completed"
-          description="Go to Competitive Benchmarking and run your local competitor analysis."
-        />
+      {state.sessionId && (
+        <NextStepCta to="/analysis" label="Next: Competitive Benchmarking" disabled={!state.interviewCompleted} />
       )}
     </div>
   );

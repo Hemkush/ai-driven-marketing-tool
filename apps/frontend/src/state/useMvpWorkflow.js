@@ -115,6 +115,21 @@ export function useMvpWorkflow() {
     setSelectedProjectSessionWorkflow(workflowSummary);
   };
 
+  // Unpack a session workflow snapshot into individual state variables.
+  // Called after loadProjectSessions / selectProjectSession so every page
+  // sees correct data immediately after login or session switch.
+  const _applySnapshot = (snap) => {
+    setAnalysis(snap?.analysis?.report ?? null);
+    setResearch(snap?.research?.report ?? null);
+    setPersonas(snap?.personas ?? []);
+    setStrategy(snap?.strategy?.strategy ?? null);
+    setRoadmap(snap?.roadmap?.roadmap ?? null);
+    const pos = snap?.positioning ?? null;
+    setPositioning(pos);
+    setPositioningHistory(pos ? [pos] : []);
+    setContentAssets(snap?.content_assets ?? []);
+  };
+
   const actions = {
     register: async () =>
       run(async () => {
@@ -302,9 +317,22 @@ export function useMvpWorkflow() {
           ]);
           setSelectedProjectSessionDetail(detail);
           setSelectedProjectSessionWorkflow(workflowSummary);
+          if (detail?.status) setInterviewStatus(detail.status);
+          _applySnapshot(workflowSummary?.snapshot);
+          if (detail?.status && detail.status !== "idle") {
+            try {
+              const chatData = await questionnaireClient.chatGet(Number(nextSessionId));
+              setSessionId(Number(nextSessionId));
+              setChatMessages(chatData.messages || []);
+              setInterviewAnalysis(chatData.analysis || null);
+              setInterviewCoverage(chatData.coverage || null);
+            } catch { /* no chat messages yet */ }
+          }
         } else {
           setSelectedProjectSessionDetail(null);
           setSelectedProjectSessionWorkflow(null);
+          setInterviewStatus("idle");
+          _applySnapshot(null);
         }
       }, "Loading business profile sessions..."),
 
@@ -315,6 +343,7 @@ export function useMvpWorkflow() {
         if (!normalized) {
           setSelectedProjectSessionDetail(null);
           setSelectedProjectSessionWorkflow(null);
+          _applySnapshot(null);
           return;
         }
         const [detail, workflowSummary] = await Promise.all([
@@ -323,6 +352,17 @@ export function useMvpWorkflow() {
         ]);
         setSelectedProjectSessionDetail(detail);
         setSelectedProjectSessionWorkflow(workflowSummary);
+        if (detail?.status) setInterviewStatus(detail.status);
+        _applySnapshot(workflowSummary?.snapshot);
+        if (detail?.status && detail.status !== "idle") {
+          try {
+            const chatData = await questionnaireClient.chatGet(Number(normalized));
+            setSessionId(Number(normalized));
+            setChatMessages(chatData.messages || []);
+            setInterviewAnalysis(chatData.analysis || null);
+            setInterviewCoverage(chatData.coverage || null);
+          } catch { /* no chat messages yet */ }
+        }
       }, "Loading session details..."),
 
     generateNextQuestions: async () =>
@@ -455,10 +495,11 @@ export function useMvpWorkflow() {
         setMsg("Positioning refined.");
       }, "Refining positioning..."),
 
-    loadPositioningHistory: async () =>
+    loadPositioningHistory: async (sessionIdOverride) =>
       run(async () => {
         if (!activeProjectId) throw new Error("Select business profile first");
-        const items = await pipelineClient.listPositioning(Number(activeProjectId));
+        const sid = sessionIdOverride || selectedProjectSessionId || null;
+        const items = await pipelineClient.listPositioning(Number(activeProjectId), sid ? Number(sid) : null);
         setPositioningHistory(items);
         setPositioning(items[0] || null);
       }, "Loading positioning history..."),

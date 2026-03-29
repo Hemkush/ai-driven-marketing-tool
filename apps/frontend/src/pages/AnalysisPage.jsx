@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ActionRow, NextStepCta } from "../components/UiBlocks";
+import { NextStepCta } from "../components/UiBlocks";
 import { CompetitorCards } from "../components/CompactCards";
 import { LoadingSkeleton } from "../components/LoadingSkeleton";
 
+/* ── StructuredMessage: parses free-text AI responses into blocks ─────── */
 function StructuredMessage({ text }) {
   const clean = (s) =>
     String(s || "")
@@ -17,15 +18,13 @@ function StructuredMessage({ text }) {
     .map((x) => x.trim())
     .filter(Boolean);
 
-  // Normalize split numbered lines:
-  // "1" + "**Launch ...** - ..." => "1. Launch ... - ..."
   const lines = [];
-  for (let i = 0; i < rawLines.length; i += 1) {
+  for (let i = 0; i < rawLines.length; i++) {
     const current = rawLines[i];
     const next = rawLines[i + 1] || "";
     if (/^\d+$/.test(current) && next) {
       lines.push(`${current}. ${clean(next)}`);
-      i += 1;
+      i++;
       continue;
     }
     lines.push(clean(current));
@@ -37,301 +36,312 @@ function StructuredMessage({ text }) {
     if (!line) return false;
     if (line.endsWith(":")) return true;
     if (isBullet(line)) return false;
-    // Single-line heading style like "Summary" or "Recommended Actions"
-    if (/^[A-Za-z][A-Za-z0-9 /&-]{2,70}$/.test(line) && nextLine) {
+    if (/^[A-Za-z][A-Za-z0-9 /&-]{2,70}$/.test(line) && nextLine)
       return isBullet(nextLine) || nextLine.endsWith(":");
-    }
     return false;
   };
 
   const blocks = [];
   let currentBlock = { heading: "Response", items: [], paragraphs: [] };
-
   const pushCurrent = () => {
-    if (currentBlock.items.length || currentBlock.paragraphs.length) {
+    if (currentBlock.items.length || currentBlock.paragraphs.length)
       blocks.push(currentBlock);
-    }
   };
 
-  for (let i = 0; i < lines.length; i += 1) {
+  for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const nextLine = lines[i + 1] || "";
     if (isHeading(line, nextLine)) {
       pushCurrent();
-      currentBlock = {
-        heading: line.replace(/:$/, "").trim(),
-        items: [],
-        paragraphs: [],
-      };
+      currentBlock = { heading: line.replace(/:$/, "").trim(), items: [], paragraphs: [] };
       continue;
     }
-    if (isBullet(line)) {
-      currentBlock.items.push(stripBullet(line));
-      continue;
-    }
-    // Convert long free text into list-like chunks where possible.
-    const sentences = line
-      .split(/(?<=[.!?])\s+/)
-      .map((s) => s.trim())
-      .filter(Boolean);
-    if (sentences.length > 1 && !currentBlock.items.length) {
+    if (isBullet(line)) { currentBlock.items.push(stripBullet(line)); continue; }
+    const sentences = line.split(/(?<=[.!?])\s+/).map((s) => s.trim()).filter(Boolean);
+    if (sentences.length > 1 && !currentBlock.items.length)
       currentBlock.items.push(...sentences.map((s) => s.replace(/[.!?]$/, "")));
-    } else {
+    else
       currentBlock.paragraphs.push(line);
-    }
   }
   pushCurrent();
 
   return (
-    <div className="structured-msg">
+    <div className="cb-structured">
       {blocks.map((b, idx) => (
-        <div key={`blk-${idx}`} className="structured-block">
-          {b.heading ? <p className="structured-heading">{b.heading}</p> : null}
-          {Array.isArray(b.items) && b.items.length ? (
-            <ul className="structured-list">
-              {b.items.map((item, itemIdx) => (
-                <li key={`it-${idx}-${itemIdx}`}>{item}</li>
-              ))}
+        <div key={idx} className="cb-structured-block">
+          {b.heading && <p className="cb-structured-heading">{b.heading}</p>}
+          {b.items.length > 0 && (
+            <ul className="cb-structured-list">
+              {b.items.map((item, i) => <li key={i}>{item}</li>)}
             </ul>
-          ) : null}
-          {Array.isArray(b.paragraphs) && b.paragraphs.length
-            ? b.paragraphs.map((p, pIdx) => (
-                <p key={`p-${idx}-${pIdx}`} className="structured-para">
-                  {p}
-                </p>
-              ))
-            : null}
+          )}
+          {b.paragraphs.map((p, i) => (
+            <p key={i} className="cb-structured-para">{p}</p>
+          ))}
         </div>
       ))}
     </div>
   );
 }
 
+function AiAvatar() {
+  return (
+    <div className="cb-avatar" aria-hidden="true">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 2l2.09 6.26L20 10l-5.91 1.74L12 18l-2.09-6.26L4 10l5.91-1.74z" />
+      </svg>
+    </div>
+  );
+}
+
+function TypingDots() {
+  return (
+    <div className="cb-typing" aria-label="AI is thinking">
+      <span /><span /><span />
+    </div>
+  );
+}
+
+const SAMPLE_QUESTIONS = [
+  "Which competitor poses the highest threat and why?",
+  "What are the 3 biggest gaps in my local market?",
+  "How should I price my services vs these competitors?",
+  "Which competitor's weaknesses can I exploit?",
+  "What would make customers choose me over the top competitor?",
+  "How saturated is my local market really?",
+  "Which services should I add to stand out?",
+  "Give me a SWOT based on this competitive landscape.",
+];
+
+const EMPTY_FEATURES = [
+  "Local competitor profiles, pricing & reviews",
+  "Price vs quality scatter map",
+  "SWOT analysis vs the local market",
+  "Hours gap — when competitors are closed",
+  "Market opportunity gaps to exploit",
+];
+
 export default function AnalysisPage({ workflow }) {
   const { state, set, actions } = workflow;
   const navigate = useNavigate();
   const assistantLogRef = useRef(null);
-  const analysisMainRef = useRef(null);
-  const [assistantMaxHeight, setAssistantMaxHeight] = useState(null);
-  const sampleQuestions = useMemo(() => {
-    const pool = [
-      "Which competitor poses the highest threat and why?",
-      "What are the 3 biggest gaps in my local market?",
-      "How should I price my services compared to these competitors?",
-      "Which competitor's weaknesses can I exploit?",
-      "What would make customers choose me over the top competitor?",
-      "How saturated is my local market really?",
-      "Which services should I add to stand out?",
-      "Give me a SWOT based on the competitive landscape.",
-    ];
-    const shuffled = [...pool].sort(() => Math.random() - 0.5);
-    return shuffled.slice(0, 4);
-  }, [state.analysis?.segment_attractiveness_analysis?.recommended_primary_segment, state.analysis?.analysis_source]);
-  const [suggestions, setSuggestions] = useState(sampleQuestions);
-  const assistantCount = state.analysisAssistantMessages.length;
-  const assistantSizeClass = assistantCount > 10 ? "tall" : assistantCount > 3 ? "mid" : "short";
+
+  const [suggestions, setSuggestions] = useState(() =>
+    [...SAMPLE_QUESTIONS].sort(() => Math.random() - 0.5).slice(0, 4)
+  );
 
   useEffect(() => {
     if (!assistantLogRef.current) return;
     assistantLogRef.current.scrollTop = assistantLogRef.current.scrollHeight;
-  }, [state.analysisAssistantMessages.length]);
+  }, [state.analysisAssistantMessages.length, state.analysisAssistantBusy]);
 
-  useEffect(() => {
-    const measure = () => {
-      if (!analysisMainRef.current || !state.analysis) {
-        setAssistantMaxHeight(null);
-        return;
-      }
-      const reportEl = analysisMainRef.current.querySelector(".analysis-report-box");
-      if (!reportEl) {
-        setAssistantMaxHeight(null);
-        return;
-      }
-      const h = Math.max(420, reportEl.offsetHeight);
-      setAssistantMaxHeight(h);
-    };
+  const sendMessage = () => actions.askAnalysisAssistant();
 
-    measure();
-    window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
-  }, [state.analysis, state.analysisAssistantMessages.length]);
-
-  useEffect(() => {
-    setSuggestions(sampleQuestions);
-  }, [sampleQuestions]);
-
-  const sendAssistantMessage = () => actions.askAnalysisAssistant();
-
-  return (
-    <div className="analysis-page">
-      {!state.interviewCompleted ? (
-        <section className="compact-card analysis-gate">
-          <h4>Complete Marketing Discovery First</h4>
-          <p className="page-subtitle">
-            Competitive Benchmarking is unlocked after you finish the interview so the model has
-            enough business, location, competitor, and budget context to benchmark your local market.
-          </p>
-          <div className="analysis-gate-steps">
-            <div className="analysis-gate-step">
-              <span className="analysis-gate-num">1</span>
-              <span>Open the Marketing Discovery page.</span>
-            </div>
-            <div className="analysis-gate-step">
-              <span className="analysis-gate-num">2</span>
-              <span>Answer the interview questions and finish the session.</span>
-            </div>
-            <div className="analysis-gate-step">
-              <span className="analysis-gate-num">3</span>
-              <span>Return here and click Run Competitive Benchmarking.</span>
-            </div>
-          </div>
-          <div className="action-row">
-            <button type="button" className="btn" onClick={() => navigate("/questionnaire")}>
-              Go To Marketing Discovery
-            </button>
-          </div>
-        </section>
-      ) : null}
-      {state.interviewCompleted ? (
-        <ActionRow>
-          <button
-            type="button"
-            className="btn"
-            onClick={actions.runAnalysis}
-            disabled={state.busy || !state.activeProjectId || !state.interviewCompleted}
-          >
-            Run Competitive Benchmarking
-          </button>
-        </ActionRow>
-      ) : null}
-      <div className={`analysis-layout ${state.analysis ? "" : "single"}`.trim()}>
-        <div ref={analysisMainRef} className="analysis-main">
-          {state.busy && <LoadingSkeleton lines={4} />}
-          {!state.busy && state.analysis && <CompetitorCards analysis={state.analysis} />}
-          {!state.busy && !state.analysis && state.interviewCompleted && (
-            <section className="compact-card analysis-empty">
-              <h4>Competitive Benchmarking Not Run Yet</h4>
-              <p className="page-subtitle">
-                Your interview is complete. Run the benchmarking report to see local competitors,
-                their pricing, services, business models, discounts, reviews, and area market size.
-              </p>
-              <div className="analysis-empty-points">
-                <div className="analysis-empty-point">
-                  <span className="analysis-empty-dot">OK</span>
-                  <span>Market Discovery interview completed</span>
-                </div>
-                <div className="analysis-empty-point">
-                  <span className="analysis-empty-dot">1</span>
-                  <span>Click <b>Run Competitive Benchmarking</b> above</span>
-                </div>
-                <div className="analysis-empty-point">
-                  <span className="analysis-empty-dot">2</span>
-                  <span>Review competitor profiles and ask follow-up questions in the assistant</span>
-                </div>
-              </div>
-            </section>
-          )}
-          {state.interviewCompleted ? (
-            <NextStepCta to="/positioning" label="Next: Positioning" disabled={!state.analysis} />
-          ) : null}
+  /* ── Gate: interview not complete ─────────────────────────────────────── */
+  if (!state.interviewCompleted) {
+    return (
+      <div className="cb-gate">
+        <div className="cb-gate-icon" aria-hidden="true">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" />
+            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+          </svg>
         </div>
-        {state.analysis && (
-          <aside
-            className={`compact-card analysis-assistant ${assistantSizeClass}`}
-            style={assistantMaxHeight ? { maxHeight: `${assistantMaxHeight}px` } : undefined}
-          >
-            <div className="analysis-assistant-head">
-              <h4>Analysis Assistant</h4>
-              <span className="assistant-live">Live</span>
-              <p className="page-subtitle">
-                Ask follow-up questions. New context here is used when you rerun analysis.
+        <h2 className="cb-gate-title">Complete Your Discovery Interview First</h2>
+        <p className="cb-gate-sub">
+          Competitive Benchmarking unlocks after the business interview — the AI needs your
+          business type, location, and competitor context to accurately benchmark your local market.
+        </p>
+        <div className="cb-gate-steps">
+          <div className="cb-gate-step cb-gate-step-done">
+            <span className="cb-step-badge cb-step-done">✓</span>
+            <div className="cb-step-body">
+              <p className="cb-step-title">Business Profile Selected</p>
+              <p className="cb-step-sub">Active project is set</p>
+            </div>
+          </div>
+          <div className="cb-gate-step">
+            <span className="cb-step-badge">2</span>
+            <div className="cb-step-body">
+              <p className="cb-step-title">Complete the Discovery Interview</p>
+              <p className="cb-step-sub">Answer all questions and click "Complete Interview"</p>
+            </div>
+          </div>
+          <div className="cb-gate-step">
+            <span className="cb-step-badge">3</span>
+            <div className="cb-step-body">
+              <p className="cb-step-title">Return Here and Run Benchmarking</p>
+              <p className="cb-step-sub">AI scans local competitors, pricing, reviews, and gaps</p>
+            </div>
+          </div>
+        </div>
+        <button className="btn" onClick={() => navigate("/questionnaire")}>
+          Go to Marketing Discovery →
+        </button>
+      </div>
+    );
+  }
+
+  /* ── Main page ─────────────────────────────────────────────────────────── */
+  return (
+    <div className="cb-page">
+
+      {/* Action bar */}
+      <div className="cb-action-bar">
+        <div className="cb-action-info">
+          <span className="cb-action-badge">Interview Complete</span>
+          <p className="cb-action-sub">
+            AI will scan local competitors, pricing, reviews, hours, and market gaps to build your report.
+          </p>
+        </div>
+        <button
+          className="btn"
+          onClick={actions.runAnalysis}
+          disabled={state.busy || !state.activeProjectId}
+        >
+          {state.busy
+            ? "Scanning…"
+            : state.analysis
+              ? "Re-run Benchmarking"
+              : "Run Competitive Benchmarking"}
+        </button>
+      </div>
+
+      {/* Loading */}
+      {state.busy && (
+        <LoadingSkeleton lines={4} message="Scanning your local market and benchmarking competitors…" />
+      )}
+
+      {/* Empty — not yet run */}
+      {!state.busy && !state.analysis && (
+        <div className="cb-empty">
+          <div className="cb-empty-icon" aria-hidden="true">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="20" x2="18" y2="10" />
+              <line x1="12" y1="20" x2="12" y2="4" />
+              <line x1="6"  y1="20" x2="6"  y2="14" />
+            </svg>
+          </div>
+          <h3 className="cb-empty-title">No Benchmarking Data Yet</h3>
+          <p className="cb-empty-sub">
+            Click "Run Competitive Benchmarking" above to scan your local market.
+          </p>
+          <ul className="cb-empty-features">
+            {EMPTY_FEATURES.map((f) => (
+              <li key={f} className="cb-empty-feature">
+                <span className="cb-empty-check" aria-hidden="true">✓</span>
+                {f}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Results + assistant */}
+      {!state.busy && state.analysis && (
+        <>
+        <div className="cb-layout">
+
+          {/* Left: results */}
+          <div className="cb-main">
+            <CompetitorCards analysis={state.analysis} />
+          </div>
+
+          {/* Right: analysis assistant */}
+          <aside className="cb-assistant">
+            <div className="cb-assistant-head">
+              <div className="cb-assistant-title-row">
+                <span className="cb-assistant-title">Analysis Assistant</span>
+                <span className="cb-assistant-live">Live</span>
+              </div>
+              <p className="cb-assistant-sub">
+                Ask follow-up questions about competitors, pricing, or market gaps.
+                Context here is used when you re-run the analysis.
               </p>
             </div>
-            <div ref={assistantLogRef} className={`analysis-assistant-log ${assistantSizeClass}`}>
-              <div className="chat-row bot">
-                <div className="chat-avatar">AI</div>
-                <div className="chat-bubble bot">
-                  <div className="chat-label">Assistant</div>
+
+            <div ref={assistantLogRef} className="cb-log">
+              {/* Welcome bubble */}
+              <div className="cb-row cb-row-bot">
+                <AiAvatar />
+                <div className="cb-bubble cb-bubble-bot">
                   <p>
-                    Welcome. I can help you interpret the competitor data, identify market gaps,
-                    and suggest how to position against local competition. Choose a sample question or type your own.
+                    I can help you interpret the competitor data, identify market gaps, and suggest
+                    how to position against local competition. Pick a question or type your own.
                   </p>
                 </div>
               </div>
+
               {state.analysisAssistantMessages.map((m, idx) => (
-                <div key={`${m.role}-${idx}`} className={m.role === "assistant" ? "chat-row bot" : "chat-row user"}>
-                  {m.role === "assistant" && <div className="chat-avatar">AI</div>}
-                  <div className={`chat-bubble ${m.role === "assistant" ? "bot" : "user"}`}>
-                    <div className="chat-label">
-                      {m.role === "assistant" ? `Assistant (${m.source || "ai"})` : "You"}
-                    </div>
-                    {m.role === "assistant" ? (
-                      <StructuredMessage text={m.content} />
-                    ) : (
-                      <p>{m.content}</p>
-                    )}
+                <div key={`${m.role}-${idx}`}
+                  className={`cb-row ${m.role === "assistant" ? "cb-row-bot" : "cb-row-user"}`}>
+                  {m.role === "assistant" && <AiAvatar />}
+                  <div className={`cb-bubble ${m.role === "assistant" ? "cb-bubble-bot" : "cb-bubble-user"}`}>
+                    {m.role === "assistant"
+                      ? <StructuredMessage text={m.content} />
+                      : <p>{m.content}</p>}
                   </div>
                 </div>
               ))}
+
               {state.analysisAssistantBusy && (
-                <div className="chat-row bot">
-                  <div className="chat-avatar">AI</div>
-                  <div className="chat-bubble bot">
-                    <div className="chat-label">Assistant</div>
-                    <p className="assistant-typing">Thinking...</p>
+                <div className="cb-row cb-row-bot">
+                  <AiAvatar />
+                  <div className="cb-bubble cb-bubble-bot">
+                    <TypingDots />
                   </div>
                 </div>
               )}
             </div>
-            <div className="chat-composer analysis-assistant-composer">
-              <label htmlFor="analysis-assistant-input">Ask about this analysis</label>
-              <div className="assistant-sample-wrap">
-                {suggestions.map((q, idx) => (
-                  <button
-                    key={`sample-q-${idx}`}
-                    type="button"
-                    className="assistant-sample-btn"
-                    disabled={state.analysisAssistantBusy}
-                    onClick={() => {
-                      setSuggestions((prev) => prev.filter((x) => x !== q));
-                      actions.askAnalysisAssistant(q);
-                    }}
-                    title={q}
-                  >
-                    {q}
-                  </button>
-                ))}
-              </div>
-              <textarea
-                id="analysis-assistant-input"
-                rows={3}
-                placeholder="Example: Which competitor should I worry about most? What pricing gap can I exploit? How do I win in this market?"
-                value={state.analysisAssistantInput}
-                onChange={(e) => set.setAnalysisAssistantInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    if (!state.analysisAssistantBusy && state.analysisAssistantInput.trim()) {
-                      sendAssistantMessage();
+
+            <div className="cb-composer">
+              {suggestions.length > 0 && (
+                <div className="cb-chips">
+                  {suggestions.map((q, idx) => (
+                    <button
+                      key={idx}
+                      className="cb-chip"
+                      disabled={state.analysisAssistantBusy}
+                      onClick={() => {
+                        setSuggestions((prev) => prev.filter((x) => x !== q));
+                        actions.askAnalysisAssistant(q);
+                      }}
+                    >
+                      {q}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <div className="cb-composer-row">
+                <textarea
+                  rows={3}
+                  placeholder="Ask about competitors, pricing gaps, win strategies…"
+                  value={state.analysisAssistantInput}
+                  onChange={(e) => set.setAnalysisAssistantInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      if (!state.analysisAssistantBusy && state.analysisAssistantInput.trim())
+                        sendMessage();
                     }
-                  }
-                }}
-              />
-              <div className="wizard-nav">
+                  }}
+                />
                 <button
-                  type="button"
-                  className="btn"
-                  onClick={sendAssistantMessage}
+                  className="btn cb-send-btn"
+                  onClick={sendMessage}
                   disabled={state.analysisAssistantBusy || !state.analysisAssistantInput.trim()}
                 >
-                  {state.analysisAssistantBusy ? "Asking..." : "Ask Assistant"}
+                  {state.analysisAssistantBusy ? "Asking…" : "Ask →"}
                 </button>
               </div>
-              <p className="assistant-hint">Press Enter to send. Shift + Enter for a new line.</p>
             </div>
           </aside>
-        )}
-      </div>
+        </div>
+        <NextStepCta to="/positioning" label="Next: Positioning" disabled={false} />
+        </>
+      )}
     </div>
   );
 }

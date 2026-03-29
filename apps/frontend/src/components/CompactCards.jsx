@@ -139,7 +139,7 @@ function HoursGapAnalysis({ data }) {
   if (!opportunity_windows.length && !coverage_notes && !recommendation) return null;
   return (
     <section className="compact-card hours-gap-card">
-      <h5>🕐 Hours Gap Analysis</h5>
+      <h5>Hours &amp; Availability Gap</h5>
       <p className="chart-subtitle">When your competitors are closed — your door can be open</p>
       {coverage_notes && <p className="hours-coverage-note">{coverage_notes}</p>}
       {opportunity_windows.length > 0 && (
@@ -163,10 +163,10 @@ function HoursGapAnalysis({ data }) {
 }
 
 const SWOT_CONFIG = [
-  { key: "strengths",    label: "Strengths",    emoji: "💪", cls: "swot-s" },
-  { key: "weaknesses",   label: "Weaknesses",   emoji: "⚠️",  cls: "swot-w" },
-  { key: "opportunities",label: "Opportunities",emoji: "🚀", cls: "swot-o" },
-  { key: "threats",      label: "Threats",      emoji: "🔥", cls: "swot-t" },
+  { key: "strengths",     label: "Strengths",     letter: "S", cls: "swot-s" },
+  { key: "weaknesses",    label: "Weaknesses",    letter: "W", cls: "swot-w" },
+  { key: "opportunities", label: "Opportunities", letter: "O", cls: "swot-o" },
+  { key: "threats",       label: "Threats",       letter: "T", cls: "swot-t" },
 ];
 
 function SwotAnalysis({ data }) {
@@ -178,10 +178,10 @@ function SwotAnalysis({ data }) {
       <h5>SWOT Analysis</h5>
       <p className="chart-subtitle">Your business vs the local market — based on your interview and competitor data</p>
       <div className="swot-grid">
-        {SWOT_CONFIG.map(({ key, label, emoji, cls }) => (
+        {SWOT_CONFIG.map(({ key, label, letter, cls }) => (
           <div key={key} className={`swot-quadrant ${cls}`}>
             <div className="swot-quadrant-head">
-              <span className="swot-emoji">{emoji}</span>
+              <span className="swot-letter">{letter}</span>
               <span className="swot-label">{label}</span>
             </div>
             <ul className="swot-list">
@@ -203,9 +203,11 @@ export function CompetitorCards({ analysis }) {
   const market = analysis.market_overview || {};
   const avgPriceLabel = ["Free", "$", "$$", "$$$", "$$$$"][Math.round(market.avg_price_level)] || "N/A";
   const densityLabel = DENSITY_LABEL[market.market_density] || market.market_density || "N/A";
+  const densityColorCls = { low: "density-low", medium: "density-medium", high: "density-high" }[market.market_density] || "";
+  const topThreat = competitors.find((c) => c.competitive_threat_level === "high") || null;
 
   return (
-    <div className="benchmarking-root">
+    <div className="cb-results">
       {/* Market Snapshot */}
       <section className="compact-card benchmarking-snapshot">
         <h4>Local Market Snapshot</h4>
@@ -216,7 +218,7 @@ export function CompetitorCards({ analysis }) {
             <span className="snapshot-key">Competitors Found</span>
           </div>
           <div className="snapshot-stat">
-            <span className="snapshot-val">{densityLabel}</span>
+            <span className={`snapshot-val ${densityColorCls}`}>{densityLabel}</span>
             <span className="snapshot-key">Market Density</span>
           </div>
           <div className="snapshot-stat">
@@ -257,7 +259,7 @@ export function CompetitorCards({ analysis }) {
           )}
           {market.win_strategies?.length > 0 && (
             <section className="compact-card benchmarking-strategies">
-              <h5>How to Win</h5>
+              <h5>Competitive Edge</h5>
               <ul className="insight-list">
                 {market.win_strategies.map((s, i) => (
                   <li key={`win-${i}`}>{s}</li>
@@ -270,115 +272,134 @@ export function CompetitorCards({ analysis }) {
 
       {/* Competitor Cards */}
       {competitors.length > 0 ? (
-        <div className="competitor-grid">
-          {competitors.map((c, idx) => {
-            const threat = THREAT_BADGE[c.competitive_threat_level] || THREAT_BADGE.medium;
-            return (
-              <article key={`comp-${idx}`} className={`compact-card competitor-card threat-card-${c.competitive_threat_level || "medium"}`}>
-                {/* Header */}
-                <div className="competitor-head">
-                  <div className="competitor-title-row">
-                    <h4 className="competitor-name">{c.name}</h4>
-                    <span className={`threat-badge ${threat.cls}`}>{threat.label}</span>
+        <>
+          <div className="cb-comp-header">
+            <div>
+              <p className="cb-comp-kicker">Competitor Intelligence</p>
+              <p className="cb-comp-sub">
+                {competitors.length} local competitor{competitors.length !== 1 ? "s" : ""} analysed · sorted by threat level
+              </p>
+            </div>
+            {topThreat && (
+              <div className="cb-top-threat">
+                <span className="cb-top-threat-label">Highest Threat</span>
+                <span className="cb-top-threat-name">{topThreat.name}</span>
+              </div>
+            )}
+          </div>
+          <div className="competitor-grid">
+            {competitors.map((c, idx) => {
+              const threat = THREAT_BADGE[c.competitive_threat_level] || THREAT_BADGE.medium;
+              return (
+                <article key={`comp-${idx}`} className={`compact-card competitor-card threat-card-${c.competitive_threat_level || "medium"}`}>
+                  {/* Header */}
+                  <div className="competitor-head">
+                    <div className="competitor-title-row">
+                      <h4 className="competitor-name">{c.name}</h4>
+                      <span className={`threat-badge ${threat.cls}`}>{threat.label}</span>
+                    </div>
+                    <div className="competitor-meta-row">
+                      <StarRating rating={c.rating} />
+                      {c.review_count != null && (
+                        <span className="review-count">({c.review_count.toLocaleString()} reviews)</span>
+                      )}
+                      <span className="price-badge">{c.price_label || "N/A"}</span>
+                    </div>
                   </div>
-                  <div className="competitor-meta-row">
-                    <StarRating rating={c.rating} />
-                    {c.review_count != null && (
-                      <span className="review-count">({c.review_count.toLocaleString()} reviews)</span>
-                    )}
-                    <span className="price-badge">{c.price_label || "N/A"}</span>
-                  </div>
-                </div>
 
-                {/* Contact & location */}
-                <div className="competitor-contact">
-                  {c.address && <p className="contact-row">📍 {c.address}</p>}
-                  {c.phone && <p className="contact-row">📞 {c.phone}</p>}
-                  {c.website && (
-                    <p className="contact-row">
-                      🌐{" "}
-                      <a href={c.website.startsWith("http") ? c.website : `https://${c.website}`} target="_blank" rel="noreferrer">
-                        {c.website.replace(/^https?:\/\//, "").split("/")[0]}
-                      </a>
-                    </p>
-                  )}
-                  {c.hours?.length > 0 && (
-                    <details className="hours-details">
-                      <summary>Opening Hours</summary>
-                      <ul className="hours-list">
-                        {c.hours.map((h, hi) => <li key={hi}>{h}</li>)}
-                      </ul>
+                  {/* Contact & location */}
+                  <div className="competitor-contact">
+                    {c.address && <p className="contact-row">📍 {c.address}</p>}
+                    {c.phone && <p className="contact-row">📞 {c.phone}</p>}
+                    {c.website && (
+                      <p className="contact-row">
+                        🌐{" "}
+                        <a href={c.website.startsWith("http") ? c.website : `https://${c.website}`} target="_blank" rel="noreferrer">
+                          {c.website.replace(/^https?:\/\//, "").split("/")[0]}
+                        </a>
+                      </p>
+                    )}
+                    {c.hours?.length > 0 && (
+                      <details className="hours-details">
+                        <summary>Opening Hours</summary>
+                        <ul className="hours-list">
+                          {c.hours.map((h, hi) => <li key={hi}>{h}</li>)}
+                        </ul>
+                      </details>
+                    )}
+                  </div>
+
+                  {/* AI Insights */}
+                  <div className="competitor-insights">
+                    {c.business_model && (
+                      <div className="insight-row">
+                        <span className="insight-label">Business Model</span>
+                        <span className="insight-value">{c.business_model}</span>
+                      </div>
+                    )}
+                    {c.pricing_notes && (
+                      <div className="insight-row insight-row-full">
+                        <span className="insight-label">Pricing</span>
+                        <span className="insight-value">{c.pricing_notes}</span>
+                      </div>
+                    )}
+                    {c.services_offered?.length > 0 && (
+                      <div className="insight-row">
+                        <span className="insight-label">Services</span>
+                        <span className="insight-value">{c.services_offered.join(" · ")}</span>
+                      </div>
+                    )}
+                    {c.special_services?.length > 0 && (
+                      <div className="insight-row">
+                        <span className="insight-label">Special</span>
+                        <span className="insight-value">{c.special_services.join(" · ")}</span>
+                      </div>
+                    )}
+                    {c.estimated_discounts?.length > 0 && (
+                      <div className="insight-row">
+                        <span className="insight-label">Discounts</span>
+                        <span className="insight-value">{c.estimated_discounts.join(" · ")}</span>
+                      </div>
+                    )}
+                    {c.how_they_compete && (
+                      <div className="insight-row insight-row-full">
+                        <span className="insight-label">Strategy</span>
+                        <span className="insight-value">{c.how_they_compete}</span>
+                      </div>
+                    )}
+                    {c.review_summary && (
+                      <div className="insight-row insight-row-full">
+                        <span className="insight-label">Customer Sentiment</span>
+                        <span className="insight-value">{c.review_summary}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Review snippets */}
+                  {c.review_snippets?.length > 0 && (
+                    <details className="review-snippets-details">
+                      <summary>Customer Reviews ({c.review_snippets.length})</summary>
+                      <div className="review-snippets">
+                        {c.review_snippets.map((r, ri) => (
+                          <blockquote key={ri} className="review-snippet">"{r}"</blockquote>
+                        ))}
+                      </div>
                     </details>
                   )}
-                </div>
 
-                {/* AI Insights */}
-                <div className="competitor-insights">
-                  {c.business_model && (
-                    <div className="insight-row">
-                      <span className="insight-label">Business Model</span>
-                      <span className="insight-value">{c.business_model}</span>
-                    </div>
+                  {c.google_maps_url && (
+                    <a href={c.google_maps_url} target="_blank" rel="noreferrer" className="maps-link-btn">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                      </svg>
+                      View on Google Maps
+                    </a>
                   )}
-                  {c.pricing_notes && (
-                    <div className="insight-row">
-                      <span className="insight-label">Pricing</span>
-                      <span className="insight-value">{c.pricing_notes}</span>
-                    </div>
-                  )}
-                  {c.services_offered?.length > 0 && (
-                    <div className="insight-row">
-                      <span className="insight-label">Services</span>
-                      <span className="insight-value">{c.services_offered.join(" · ")}</span>
-                    </div>
-                  )}
-                  {c.special_services?.length > 0 && (
-                    <div className="insight-row">
-                      <span className="insight-label">Special Services</span>
-                      <span className="insight-value">{c.special_services.join(" · ")}</span>
-                    </div>
-                  )}
-                  {c.estimated_discounts?.length > 0 && (
-                    <div className="insight-row">
-                      <span className="insight-label">Discounts</span>
-                      <span className="insight-value">{c.estimated_discounts.join(" · ")}</span>
-                    </div>
-                  )}
-                  {c.how_they_compete && (
-                    <div className="insight-row">
-                      <span className="insight-label">Strategy</span>
-                      <span className="insight-value">{c.how_they_compete}</span>
-                    </div>
-                  )}
-                  {c.review_summary && (
-                    <div className="insight-row">
-                      <span className="insight-label">Customer Sentiment</span>
-                      <span className="insight-value">{c.review_summary}</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Review snippets */}
-                {c.review_snippets?.length > 0 && (
-                  <details className="review-snippets-details">
-                    <summary>Customer Reviews ({c.review_snippets.length})</summary>
-                    <div className="review-snippets">
-                      {c.review_snippets.map((r, ri) => (
-                        <blockquote key={ri} className="review-snippet">"{r}"</blockquote>
-                      ))}
-                    </div>
-                  </details>
-                )}
-
-                {c.google_maps_url && (
-                  <a href={c.google_maps_url} target="_blank" rel="noreferrer" className="maps-link">
-                    View on Google Maps →
-                  </a>
-                )}
-              </article>
-            );
-          })}
-        </div>
+                </article>
+              );
+            })}
+          </div>
+        </>
       ) : (
         <section className="compact-card benchmarking-empty">
           <p>No competitors found in the area. Try increasing the search radius or checking the business address.</p>
@@ -429,9 +450,32 @@ export function PersonaCards({ personas = [] }) {
                   {basic.age && <span className="persona-tag">{basic.age}</span>}
                   {basic.income && <span className="persona-tag">{basic.income}</span>}
                 </div>
-                {basic.location && <p className="persona-location">📍 {basic.location}</p>}
+                {basic.location && (
+                  <p className="persona-location">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
+                      stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
+                      style={{ display: "inline", marginRight: 3, verticalAlign: "middle", flexShrink: 0 }}>
+                      <path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0 1 18 0z" />
+                      <circle cx="12" cy="10" r="3" />
+                    </svg>
+                    {basic.location}
+                  </p>
+                )}
               </div>
             </div>
+
+            {/* Key message — hero callout immediately below header */}
+            {engage.key_messages_that_convert && (
+              <div className="persona-key-message">
+                <span className="persona-key-label">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" style={{ display: "inline", marginRight: 4, verticalAlign: "middle" }}>
+                    <path d="M12 2l2.09 6.26L20 10l-5.91 1.74L12 18l-2.09-6.26L4 10l5.91-1.74z" />
+                  </svg>
+                  Message That Converts
+                </span>
+                <span className="persona-key-text">&ldquo;{engage.key_messages_that_convert}&rdquo;</span>
+              </div>
+            )}
 
             {/* Psychographic */}
             <div className="persona-section">
@@ -442,26 +486,6 @@ export function PersonaCards({ personas = [] }) {
               <div className="persona-section-title">Pain Points</div>
               <p className="persona-section-text">{psycho.pain_points_and_frustrations || "N/A"}</p>
             </div>
-            {psycho.values_and_priorities && (
-              <div className="persona-section">
-                <div className="persona-section-title">Values & Priorities</div>
-                <p className="persona-section-text">{psycho.values_and_priorities}</p>
-              </div>
-            )}
-
-            {/* Behavioral */}
-            {behavior.decision_making_process && (
-              <div className="persona-section">
-                <div className="persona-section-title">How They Decide</div>
-                <p className="persona-section-text">{behavior.decision_making_process}</p>
-              </div>
-            )}
-            {behavior.buying_triggers_and_barriers && (
-              <div className="persona-section">
-                <div className="persona-section-title">Triggers & Barriers</div>
-                <p className="persona-section-text">{behavior.buying_triggers_and_barriers}</p>
-              </div>
-            )}
 
             {/* Channels */}
             {channels.length > 0 && (
@@ -483,17 +507,37 @@ export function PersonaCards({ personas = [] }) {
               </div>
             )}
 
-            {/* Key message */}
-            {engage.key_messages_that_convert && (
-              <div className="persona-key-message">
-                <span className="persona-key-label">Key Message</span>
-                <span className="persona-key-text">&ldquo;{engage.key_messages_that_convert}&rdquo;</span>
+            {/* Behavioral (secondary detail) */}
+            {psycho.values_and_priorities && (
+              <div className="persona-section">
+                <div className="persona-section-title">Values & Priorities</div>
+                <p className="persona-section-text">{psycho.values_and_priorities}</p>
+              </div>
+            )}
+            {behavior.decision_making_process && (
+              <div className="persona-section">
+                <div className="persona-section-title">How They Decide</div>
+                <p className="persona-section-text">{behavior.decision_making_process}</p>
+              </div>
+            )}
+            {behavior.buying_triggers_and_barriers && (
+              <div className="persona-section">
+                <div className="persona-section-title">Triggers & Barriers</div>
+                <p className="persona-section-text">{behavior.buying_triggers_and_barriers}</p>
               </div>
             )}
 
             {/* Best time */}
             {engage.best_times_to_reach && (
-              <p className="persona-best-time">🕐 Best time to reach: {engage.best_times_to_reach}</p>
+              <p className="persona-best-time">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                  style={{ display: "inline", marginRight: 5, verticalAlign: "middle", flexShrink: 0 }}>
+                  <circle cx="12" cy="12" r="10" />
+                  <polyline points="12 6 12 12 16 14" />
+                </svg>
+                Best time to reach: {engage.best_times_to_reach}
+              </p>
             )}
           </article>
         );
@@ -931,7 +975,10 @@ export function PositioningCard({ positioning, isLatest = false }) {
 
       {/* Rationale */}
       {rationale && (
-        <p className="positioning-rationale">{rationale}</p>
+        <details className="positioning-rationale-details">
+          <summary className="positioning-rationale-summary">Why this positioning?</summary>
+          <p className="positioning-rationale">{rationale}</p>
+        </details>
       )}
     </div>
   );
@@ -939,59 +986,177 @@ export function PositioningCard({ positioning, isLatest = false }) {
 
 export function ResearchCards({ research }) {
   if (!research) return null;
+  const customerInsights = research.target_customer_insights || [];
+  const competitorInsights = research.competitor_insights || [];
+  const sources = research.sources || [];
+
   return (
-    <div className="card-grid">
-      <article className="compact-card">
-        <h4>Research Summary</h4>
-        <p>{research.research_summary || "N/A"}</p>
-      </article>
-      <article className="compact-card">
-        <h4>Customer Insights</h4>
-        {(research.target_customer_insights || []).map((x, idx) => (
-          <p key={idx}>
-            <b>{x.theme}:</b> {x.insight}
+    <div className="rc-wrap">
+      {/* Summary hero */}
+      {research.research_summary && (
+        <div className="rc-summary">
+          <div className="rc-summary-icon" aria-hidden="true">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" />
+            </svg>
+          </div>
+          <p className="rc-summary-text">{research.research_summary}</p>
+        </div>
+      )}
+
+      {/* Two-column insights */}
+      <div className="rc-insights-grid">
+        {/* Customer Insights */}
+        {customerInsights.length > 0 && (
+          <div className="rc-insights-col">
+            <div className="rc-col-head">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" />
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
+              </svg>
+              <span className="rc-col-title">Customer Insights</span>
+              <span className="rc-col-count">{customerInsights.length}</span>
+            </div>
+            <div className="rc-insight-list">
+              {customerInsights.map((x, i) => (
+                <div key={i} className="rc-insight-item rc-insight-customer">
+                  <span className="rc-insight-theme">{x.theme}</span>
+                  <p className="rc-insight-text">{x.insight}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Competitor Insights */}
+        {competitorInsights.length > 0 && (
+          <div className="rc-insights-col">
+            <div className="rc-col-head">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" />
+                <line x1="6" y1="20" x2="6" y2="14" />
+              </svg>
+              <span className="rc-col-title">Competitor Insights</span>
+              <span className="rc-col-count">{competitorInsights.length}</span>
+            </div>
+            <div className="rc-insight-list">
+              {competitorInsights.map((x, i) => (
+                <div key={i} className="rc-insight-item rc-insight-competitor">
+                  <span className="rc-insight-theme">{x.theme}</span>
+                  <p className="rc-insight-text">{x.insight}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Sources */}
+      {sources.length > 0 && (
+        <div className="rc-sources">
+          <p className="rc-sources-label">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+              style={{ display: "inline", marginRight: 5, verticalAlign: "middle" }}>
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+            </svg>
+            Sources Analyzed
           </p>
-        ))}
-      </article>
-      <article className="compact-card">
-        <h4>Competitor Insights</h4>
-        {(research.competitor_insights || []).map((x, idx) => (
-          <p key={idx}>
-            <b>{x.theme}:</b> {x.insight}
-          </p>
-        ))}
-      </article>
-      <article className="compact-card">
-        <h4>Sources</h4>
-        {(research.sources || []).map((s, idx) => (
-          <p key={idx}>
-            <b>{s.title}</b> - {s.url}
-          </p>
-        ))}
-      </article>
+          <div className="rc-sources-list">
+            {sources.map((s, i) => (
+              <a key={i} href={s.url} target="_blank" rel="noopener noreferrer"
+                className="rc-source-item">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                  <polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
+                </svg>
+                {s.title || s.url}
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 export function StrategyCards({ strategy }) {
   if (!strategy) return null;
+  const channels = strategy.prioritized_channels || [];
+  const keyMessages = strategy.key_messages || [];
+  const primary = channels[0];
+  const secondary = channels.slice(1);
+
   return (
-    <div className="card-grid">
-      {(strategy.prioritized_channels || []).map((c, idx) => (
-        <article className="compact-card" key={`${c.channel}-${idx}`}>
-          <h4>
-            #{c.priority || idx + 1} {c.channel}
-          </h4>
-          <p>{c.why}</p>
-          <p>
-            <b>Actions:</b> {(c.weekly_actions || []).join(" | ") || "N/A"}
+    <div className="sc-wrap">
+      {/* Primary channel — hero card */}
+      {primary && (
+        <div className="sc-primary">
+          <div className="sc-primary-head">
+            <span className="sc-rank-badge sc-rank-primary">Primary Channel</span>
+            <h3 className="sc-primary-name">{primary.channel}</h3>
+          </div>
+          <p className="sc-primary-why">{primary.why}</p>
+          {(primary.weekly_actions || []).length > 0 && (
+            <div className="sc-actions-wrap">
+              <p className="sc-actions-label">Weekly Actions</p>
+              <ul className="sc-actions-list sc-actions-primary">
+                {primary.weekly_actions.map((a, i) => (
+                  <li key={i} className="sc-action-item">{a}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Secondary channels grid */}
+      {secondary.length > 0 && (
+        <div className="sc-secondary-grid">
+          {secondary.map((c, idx) => (
+            <div key={`${c.channel}-${idx}`} className="sc-channel-card">
+              <div className="sc-channel-head">
+                <span className="sc-rank-badge">#{c.priority || idx + 2}</span>
+                <h4 className="sc-channel-name">{c.channel}</h4>
+              </div>
+              <p className="sc-channel-why">{c.why}</p>
+              {(c.weekly_actions || []).length > 0 && (
+                <ul className="sc-actions-list">
+                  {c.weekly_actions.map((a, i) => (
+                    <li key={i} className="sc-action-item">{a}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Key messages */}
+      {keyMessages.length > 0 && (
+        <div className="sc-messages">
+          <p className="sc-messages-title">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"
+              style={{ display: "inline", marginRight: 6, verticalAlign: "middle" }}>
+              <path d="M12 2l2.09 6.26L20 10l-5.91 1.74L12 18l-2.09-6.26L4 10l5.91-1.74z" />
+            </svg>
+            Key Messages
           </p>
-        </article>
-      ))}
-      <article className="compact-card">
-        <h4>Key Messages</h4>
-        <p>{(strategy.key_messages || []).join(" | ") || "N/A"}</p>
-      </article>
+          <div className="sc-messages-list">
+            {keyMessages.map((m, i) => (
+              <div key={i} className="sc-message-item">
+                <span className="sc-message-q">&ldquo;</span>
+                <p className="sc-message-text">{m}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -999,56 +1164,152 @@ export function StrategyCards({ strategy }) {
 export function RoadmapCards({ roadmap }) {
   if (!roadmap) return null;
   const weeks = roadmap.weekly_plan || [];
+  const milestones = roadmap.milestones || [];
+
+  // Group weeks by phase
+  const phaseOrder = [];
+  const phaseMap = {};
+  weeks.forEach((w) => {
+    const key = w.phase || `Month ${Math.ceil((w.week || 1) / 4)}`;
+    if (!phaseMap[key]) { phaseMap[key] = []; phaseOrder.push(key); }
+    phaseMap[key].push(w);
+  });
+
+  const PHASE_COLORS = ["#c72832", "#0f766e", "#7c3aed"];
+
   return (
-    <div className="card-grid">
-      <article className="compact-card">
-        <h4>Milestones</h4>
-        {(roadmap.milestones || []).map((m, idx) => (
-          <p key={idx}>
-            <b>Day {m.day}:</b> {m.goal}
+    <div className="rm-wrap">
+      {/* Milestone tracker */}
+      {milestones.length > 0 && (
+        <div className="rm-milestones">
+          <p className="rm-milestones-title">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
+              style={{ display: "inline", marginRight: 6, verticalAlign: "middle" }}>
+              <polyline points="9 11 12 14 22 4" />
+              <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+            </svg>
+            Key Milestones
           </p>
-        ))}
-      </article>
-      {weeks.slice(0, 6).map((w) => (
-        <article className="compact-card" key={w.week}>
-          <h4>
-            Week {w.week} - {w.phase}
-          </h4>
-          <p>{w.objective}</p>
-          <p>
-            <b>Owner:</b> {w.owner} | <b>KPI:</b> {w.kpi}
-          </p>
-        </article>
+          <div className="rm-milestones-track">
+            {milestones.map((m, i) => (
+              <div key={i} className="rm-milestone">
+                <div className="rm-milestone-dot" />
+                {i < milestones.length - 1 && <div className="rm-milestone-line" />}
+                <div className="rm-milestone-body">
+                  <span className="rm-milestone-day">Day {m.day}</span>
+                  <p className="rm-milestone-goal">{m.goal}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Phase sections */}
+      {phaseOrder.map((phaseName, pi) => (
+        <div key={phaseName} className="rm-phase">
+          <div className="rm-phase-header" style={{ borderLeftColor: PHASE_COLORS[pi % PHASE_COLORS.length] }}>
+            <span className="rm-phase-num" style={{ background: PHASE_COLORS[pi % PHASE_COLORS.length] }}>
+              {pi + 1}
+            </span>
+            <h4 className="rm-phase-name">{phaseName}</h4>
+            <span className="rm-phase-weeks-count">{phaseMap[phaseName].length} weeks</span>
+          </div>
+          <div className="rm-weeks-grid">
+            {phaseMap[phaseName].map((w) => (
+              <div key={w.week} className="rm-week-card">
+                <div className="rm-week-head">
+                  <span className="rm-week-label">Week {w.week}</span>
+                  {w.kpi && <span className="rm-week-kpi">{w.kpi}</span>}
+                </div>
+                <p className="rm-week-objective">{w.objective}</p>
+                {(w.daily_actions || []).length > 0 && (
+                  <ul className="rm-week-actions">
+                    {w.daily_actions.slice(0, 3).map((a, i) => (
+                      <li key={i}>{a}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
       ))}
     </div>
   );
 }
 
-export function ContentAssetCards({ assets = [] }) {
+function CopyButton({ text }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = () => {
+    navigator.clipboard.writeText(text || "").then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
   return (
-    <div className="card-grid">
-      {assets.map((a) => (
-        <article className="compact-card" key={a.id || a.storage_uri}>
-          <h4>{a.asset_type}</h4>
-          <div className="meta-row">
-            <span>Status: {a.status || "ready"}</span>
-          </div>
-          <p>
-            <b>Storage:</b> {a.storage_uri}
-          </p>
-          <p>
-            <b>Title:</b> {a.metadata?.title || a.metadata?.headline || "N/A"}
-          </p>
-          <p>
-            <b>Preview:</b>{" "}
-            {a.metadata?.caption ||
-              a.metadata?.description ||
-              a.metadata?.body ||
-              a.metadata?.cta ||
-              "No preview"}
-          </p>
-        </article>
-      ))}
+    <button className={`ca-copy-btn${copied ? " ca-copied" : ""}`} onClick={handleCopy}>
+      {copied ? (
+        <>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+          Copied!
+        </>
+      ) : (
+        <>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+          </svg>
+          Copy
+        </>
+      )}
+    </button>
+  );
+}
+
+export function ContentAssetCards({ assets = [] }) {
+  if (!assets.length) return null;
+  return (
+    <div className="ca-wrap">
+      {assets.map((a, idx) => {
+        const meta = a.metadata || {};
+        const title = meta.title || meta.headline || "";
+        const hook = meta.hook || meta.subject || "";
+        const body = meta.body || meta.caption || meta.description || meta.content || "";
+        const cta = meta.cta || "";
+        const copyText = [title, hook, body, cta].filter(Boolean).join("\n\n");
+
+        return (
+          <article key={a.id || idx} className="ca-asset-card">
+            {/* Card header */}
+            <div className="ca-asset-head">
+              <span className="ca-asset-type">{a.asset_type}</span>
+              <CopyButton text={copyText} />
+            </div>
+
+            {/* Content */}
+            <div className="ca-asset-body">
+              {title && <p className="ca-asset-title">{title}</p>}
+              {hook && <p className="ca-asset-hook">{hook}</p>}
+              {body && <p className="ca-asset-content">{body}</p>}
+              {cta && (
+                <div className="ca-asset-cta">
+                  <span className="ca-cta-label">CTA</span>
+                  <span className="ca-cta-text">{cta}</span>
+                </div>
+              )}
+              {!title && !body && !hook && !cta && (
+                <p className="ca-asset-empty">No content preview available.</p>
+              )}
+            </div>
+          </article>
+        );
+      })}
     </div>
   );
 }

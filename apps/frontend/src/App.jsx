@@ -48,7 +48,7 @@ export default function App() {
   }
 
   return (
-    <AppShell me={state.me} onLogout={actions.logout} progress={progress}>
+    <AppShell me={state.me} onLogout={actions.logout} progress={progress} busy={state.busy}>
       <ToastStack toasts={state.toasts} onDismiss={actions.dismissToast} />
       <Routes>
         <Route path="/" element={<Navigate to="/projects" replace />} />
@@ -65,8 +65,6 @@ export default function App() {
         <Route path="*" element={<Navigate to="/projects" replace />} />
       </Routes>
 
-      {state.msg && <p style={{ marginTop: 16 }}>{state.msg}</p>}
-      {state.busy && <p>Processing...</p>}
     </AppShell>
   );
 }

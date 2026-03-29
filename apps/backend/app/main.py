@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import router
-from app.api.mvp_routes import router as mvp_router
+from app.api.mvp import router as mvp_router
 from app.core.config import settings
 from fastapi.responses import JSONResponse
 from fastapi import Request

@@ -81,8 +81,10 @@ export const pipelineClient = {
         owner_feedback: ownerFeedback,
       })
       .then((r) => r.data),
-  listPositioning: (businessProfileId) =>
-    api.get(`/mvp/positioning/${businessProfileId}`).then((r) => r.data.items || []),
+  listPositioning: (businessProfileId, sessionId) => {
+    const params = sessionId ? { session_id: sessionId } : {};
+    return api.get(`/mvp/positioning/${businessProfileId}`, { params }).then((r) => r.data.items || []);
+  },
   runResearch: (businessProfileId) =>
     api.post("/mvp/research/run", { business_profile_id: businessProfileId }).then((r) => r.data),
   generatePersonas: (businessProfileId) =>
