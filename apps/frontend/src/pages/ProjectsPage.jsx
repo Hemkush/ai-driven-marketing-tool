@@ -41,7 +41,10 @@ export default function ProjectsPage({ workflow }) {
       selectProjectSession={actions.selectProjectSession}
       selectedProjectSessionDetail={state.selectedProjectSessionDetail}
       selectedProjectSessionWorkflow={state.selectedProjectSessionWorkflow}
-      onStartWorkflow={() => navigate("/questionnaire")}
+      onStartWorkflow={() => {
+        actions.resetForNewSession();
+        navigate("/questionnaire");
+      }}
     />
   );
 }

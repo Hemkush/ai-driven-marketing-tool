@@ -1,5 +1,8 @@
+import secrets
+from datetime import datetime, timedelta, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
 
 from app.core.auth import (
@@ -11,7 +14,8 @@ from app.core.auth import (
 from app.core.rate_limit import limiter
 from app.core.security import require_internal_api_key
 from app.db import get_db
-from app.models import Generation, Project, User
+from app.models import Generation, PendingRegistration, Project, User
+from app.services.email_sender import send_verification_email
 from app.services.generator import generate_campaign_brief, generate_channel_assets
 from app.services.storage import list_generations, save_generation
 
@@ -34,14 +38,18 @@ def _resolve_business_profile_id(
 
 
 class RegisterRequest(BaseModel):
-    email: str = Field(min_length=5, max_length=255)
+    email: EmailStr
     password: str = Field(min_length=8, max_length=128)
     full_name: str | None = Field(default=None, max_length=255)
 
 
 class LoginRequest(BaseModel):
-    email: str = Field(min_length=5, max_length=255)
+    email: EmailStr
     password: str = Field(min_length=8, max_length=128)
+
+
+class ResendVerificationRequest(BaseModel):
+    email: EmailStr
 
 
 class ProjectCreateRequest(BaseModel):
@@ -63,30 +71,91 @@ def ping():
 
 @router.post("/auth/register", status_code=status.HTTP_201_CREATED)
 def register(payload: RegisterRequest, db: Session = Depends(get_db)):
-    existing = db.query(User).filter(User.email == payload.email.lower()).first()
-    if existing:
+    email = payload.email.lower()
+
+    # Block if already a verified user
+    if db.query(User).filter(User.email == email).first():
         raise HTTPException(status_code=409, detail="Email already registered")
 
-    user = User(
-        email=payload.email.lower(),
-        password_hash=hash_password(payload.password),
-        full_name=payload.full_name,
-    )
-    db.add(user)
-    db.commit()
-    db.refresh(user)
+    token = secrets.token_urlsafe(48)
+    expires_at = datetime.now(timezone.utc) + timedelta(hours=24)
 
-    return {"id": user.id, "email": user.email, "full_name": user.full_name}
+    # Upsert pending registration — allows retry if previous attempt expired
+    pending = db.query(PendingRegistration).filter(PendingRegistration.email == email).first()
+    if pending:
+        pending.password_hash = hash_password(payload.password)
+        pending.full_name = payload.full_name
+        pending.token = token
+        pending.expires_at = expires_at
+    else:
+        pending = PendingRegistration(
+            email=email,
+            password_hash=hash_password(payload.password),
+            full_name=payload.full_name,
+            token=token,
+            expires_at=expires_at,
+        )
+        db.add(pending)
+    db.commit()
+
+    email_sent = send_verification_email(email, token)
+    return {"email": email, "email_sent": email_sent}
 
 
 @router.post("/auth/login")
 def login(payload: LoginRequest, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == payload.email.lower()).first()
+    email = payload.email.lower()
+    user = db.query(User).filter(User.email == email).first()
     if not user or not verify_password(payload.password, user.password_hash):
+        # Check if they registered but never verified
+        pending = db.query(PendingRegistration).filter(PendingRegistration.email == email).first()
+        if pending:
+            raise HTTPException(status_code=403, detail="EMAIL_NOT_VERIFIED")
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     token = create_access_token(user.id)
     return {"access_token": token, "token_type": "bearer"}
+
+
+@router.get("/auth/verify-email")
+def verify_email(token: str, db: Session = Depends(get_db)):
+    pending = db.query(PendingRegistration).filter(PendingRegistration.token == token).first()
+    if not pending:
+        # Maybe already verified
+        raise HTTPException(status_code=400, detail="Invalid or expired verification link.")
+    if datetime.now(timezone.utc) > pending.expires_at:
+        db.delete(pending)
+        db.commit()
+        raise HTTPException(status_code=400, detail="Verification link has expired. Please register again.")
+
+    # Create the real user now
+    if not db.query(User).filter(User.email == pending.email).first():
+        user = User(
+            email=pending.email,
+            password_hash=pending.password_hash,
+            full_name=pending.full_name,
+        )
+        db.add(user)
+
+    db.delete(pending)
+    db.commit()
+    return {"message": "Email verified successfully. You can now sign in."}
+
+
+@router.post("/auth/resend-verification")
+def resend_verification(payload: ResendVerificationRequest, db: Session = Depends(get_db)):
+    email = payload.email.lower()
+    pending = db.query(PendingRegistration).filter(PendingRegistration.email == email).first()
+    # Always return 200 to avoid leaking whether email exists
+    if not pending:
+        return {"message": "If that email exists and is unverified, a new link has been sent."}
+
+    token = secrets.token_urlsafe(48)
+    pending.token = token
+    pending.expires_at = datetime.now(timezone.utc) + timedelta(hours=24)
+    db.commit()
+    send_verification_email(email, token)
+    return {"message": "If that email exists and is unverified, a new link has been sent."}
 
 
 @router.get("/auth/me")

@@ -3,9 +3,12 @@ Competitive Benchmarking Service
 Pipeline: Geocode → Google Places Nearby Search → Place Details → OpenAI Enrichment
 """
 import json
+import logging
 
 import httpx
 from openai import OpenAI
+
+logger = logging.getLogger(__name__)
 
 from app.core.config import settings
 
@@ -354,9 +357,18 @@ def _enrich_with_ai(
             timeout=settings.openai_timeout_seconds,
             max_retries=settings.openai_max_retries,
         )
-        resp = client.responses.create(model=settings.openai_model, input=prompt)
-        return _extract_json(_response_to_text(resp)) or {}
-    except Exception:
+        resp = client.chat.completions.create(
+            model=settings.openai_model,
+            response_format={"type": "json_object"},
+            messages=[{"role": "user", "content": prompt}],
+        )
+        raw = resp.choices[0].message.content or ""
+        logger.info("AI enrichment raw response (first 500 chars): %s", raw[:500])
+        result = _extract_json(raw) or {}
+        logger.info("AI enrichment keys returned: %s", list(result.keys()))
+        return result
+    except Exception as exc:
+        logger.error("AI enrichment failed: %s", exc, exc_info=True)
         return {}
 
 

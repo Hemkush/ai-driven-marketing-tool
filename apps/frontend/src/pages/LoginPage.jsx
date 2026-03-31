@@ -17,8 +17,11 @@ export default function LoginPage({ workflow }) {
         setPassword={set.setPassword}
         register={actions.register}
         login={actions.login}
+        resendVerification={actions.resendVerification}
+        clearPendingVerification={actions.clearPendingVerification}
         busy={state.busy}
         msg={state.msg}
+        pendingVerificationEmail={state.pendingVerificationEmail}
       />
     </>
   );

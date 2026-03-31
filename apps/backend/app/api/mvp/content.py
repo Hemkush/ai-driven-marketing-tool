@@ -63,6 +63,7 @@ def generate_content_contract(
         asset_type=payload.asset_type,
         prompt_text=payload.prompt_text,
         num_variants=payload.num_variants,
+        tone=payload.tone,
     )
 
     rows = []

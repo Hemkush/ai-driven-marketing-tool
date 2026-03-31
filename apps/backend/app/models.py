@@ -25,6 +25,21 @@ class User(Base):
     projects: Mapped[list[Project]] = relationship(back_populates="owner")
 
 
+class PendingRegistration(Base):
+    """Holds signups until email is verified. Deleted on verify or expiry."""
+    __tablename__ = "pending_registrations"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    full_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    token: Mapped[str] = mapped_column(String(128), unique=True, index=True, nullable=False)
+    expires_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[DateTime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
 class Project(Base):
     __tablename__ = "projects"
 

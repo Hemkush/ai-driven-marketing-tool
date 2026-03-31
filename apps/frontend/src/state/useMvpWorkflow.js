@@ -16,6 +16,7 @@ export function useMvpWorkflow() {
   const [msg, setMsg] = useState("");
   const [toasts, setToasts] = useState([]);
   const [busy, setBusy] = useState(false);
+  const [pendingVerificationEmail, setPendingVerificationEmail] = useState("");
 
   const [projects, setProjects] = useState([]);
   const [projectName, setProjectName] = useState("");
@@ -49,6 +50,7 @@ export function useMvpWorkflow() {
   const [assetType, setAssetType] = useState("social_post");
   const [assetPrompt, setAssetPrompt] = useState("Create premium launch-week content.");
   const [numVariants, setNumVariants] = useState(3);
+  const [assetTone, setAssetTone] = useState("professional");
 
   const activeProject = useMemo(
     () => projects.find((p) => String(p.id) === String(activeProjectId)) || null,
@@ -136,17 +138,32 @@ export function useMvpWorkflow() {
         if (!companyName.trim()) {
           throw new Error("Company/organization name is required");
         }
-        await authClient.register({
+        const data = await authClient.register({
           email,
           password,
           full_name: companyName.trim(),
         });
-        setMsg("Registered. Login now.");
+        setPendingVerificationEmail(email);
+        setMsg(
+          data.email_sent
+            ? `Verification email sent to ${email}. Please check your inbox.`
+            : `Account created. Check your inbox at ${email} to verify.`
+        );
       }, "Registering..."),
 
     login: async () =>
       run(async () => {
-        const auth = await authClient.login({ email, password });
+        let auth;
+        try {
+          auth = await authClient.login({ email, password });
+        } catch (err) {
+          const detail = err?.response?.data?.detail;
+          if (detail === "EMAIL_NOT_VERIFIED") {
+            setPendingVerificationEmail(email);
+            throw new Error("EMAIL_NOT_VERIFIED");
+          }
+          throw err;
+        }
         setAuthToken(auth.access_token);
         const [meData, items] = await Promise.all([authClient.me(), projectClient.list()]);
         setMe(meData);
@@ -155,9 +172,21 @@ export function useMvpWorkflow() {
         setMsg("Logged in.");
       }, "Logging in..."),
 
+    resendVerification: async (targetEmail) =>
+      run(async () => {
+        await authClient.resendVerification(targetEmail || email);
+        setMsg("Verification email resent. Check your inbox.");
+      }, "Resending..."),
+
+    clearPendingVerification: () => {
+      setPendingVerificationEmail("");
+      setMsg("");
+    },
+
     logout: () => {
       setAuthToken(null);
       setMe(null);
+      setPendingVerificationEmail("");
       setProjects([]);
       setActiveProjectId("");
       setSessionId(null);
@@ -180,6 +209,7 @@ export function useMvpWorkflow() {
       setStrategy(null);
       setRoadmap(null);
       setContentAssets([]);
+      setAssetTone("professional");
       setMsg("Logged out.");
     },
 
@@ -226,12 +256,26 @@ export function useMvpWorkflow() {
     startQuestionnaireChat: async () =>
       run(async () => {
         if (!activeProjectId) throw new Error("Select business profile first");
+
+        // Clear ALL previous session data immediately — no stale flash
+        setSessionId(null);
+        setChatMessages([]);
+        setInterviewStatus("idle");
+        setInterviewCoverage(null);
+        setInterviewAnalysis(null);
+        setAnalysis(null);
+        setPositioning(null);
+        setPositioningHistory([]);
+        setResearch(null);
+        setPersonas([]);
+        setStrategy(null);
+        setRoadmap(null);
+        setContentAssets([]);
+
         const data = await questionnaireClient.chatStart(Number(activeProjectId));
         setSessionId(data.session_id);
         setChatMessages(data.messages || []);
         setInterviewStatus(data.status || "in_progress");
-        setInterviewCoverage(null);
-        setInterviewAnalysis(null);
         await actions.loadProjectSessions(String(activeProjectId), String(data.session_id));
         setMsg("Business interview chat started.");
       }, "Starting chatbot..."),
@@ -327,11 +371,20 @@ export function useMvpWorkflow() {
               setInterviewAnalysis(chatData.analysis || null);
               setInterviewCoverage(chatData.coverage || null);
             } catch { /* no chat messages yet */ }
+          } else {
+            // New / idle session — clear all chat state
+            setSessionId(null);
+            setChatMessages([]);
+            setInterviewCoverage(null);
+            setInterviewAnalysis(null);
           }
         } else {
           setSelectedProjectSessionDetail(null);
           setSelectedProjectSessionWorkflow(null);
           setInterviewStatus("idle");
+          setChatMessages([]);
+          setInterviewCoverage(null);
+          setInterviewAnalysis(null);
           _applySnapshot(null);
         }
       }, "Loading business profile sessions..."),
@@ -362,6 +415,12 @@ export function useMvpWorkflow() {
             setInterviewAnalysis(chatData.analysis || null);
             setInterviewCoverage(chatData.coverage || null);
           } catch { /* no chat messages yet */ }
+        } else {
+          // Idle session — clear chat state
+          setSessionId(null);
+          setChatMessages([]);
+          setInterviewCoverage(null);
+          setInterviewAnalysis(null);
         }
       }, "Loading session details..."),
 
@@ -543,8 +602,11 @@ export function useMvpWorkflow() {
           asset_type: assetType,
           prompt_text: assetPrompt,
           num_variants: Number(numVariants),
+          tone: assetTone,
         });
-        setContentAssets(data.assets || []);
+        // Prepend new assets so the latest always appears at the top.
+        // Existing assets from other types are kept — each type generates independently.
+        setContentAssets((prev) => [...(data.assets || []), ...prev]);
         await refreshSelectedSessionWorkflow();
         setMsg("Content assets generated.");
       }, "Generating content assets..."),
@@ -555,6 +617,30 @@ export function useMvpWorkflow() {
         setContentAssets(items);
         setMsg("Loaded stored assets.");
       }, "Loading content assets..."),
+
+    clearAssetsByType: (type) => {
+      setContentAssets((prev) => prev.filter((a) => a.asset_type !== type));
+    },
+
+    clearAllAssets: () => setContentAssets([]),
+
+    resetForNewSession: () => {
+      setSessionId(null);
+      setChatMessages([]);
+      setInterviewStatus("idle");
+      setInterviewCoverage(null);
+      setInterviewAnalysis(null);
+      setAnalysis(null);
+      setAnalysisAssistantMessages([]);
+      setAnalysisAssistantInput("");
+      setPositioning(null);
+      setPositioningHistory([]);
+      setResearch(null);
+      setPersonas([]);
+      setStrategy(null);
+      setRoadmap(null);
+      setContentAssets([]);
+    },
   };
 
   return {
@@ -566,6 +652,7 @@ export function useMvpWorkflow() {
       msg,
       toasts,
       busy,
+      pendingVerificationEmail,
       projects,
       projectName,
       projectDescription,
@@ -598,6 +685,7 @@ export function useMvpWorkflow() {
       assetType,
       assetPrompt,
       numVariants,
+      assetTone,
     },
     set: {
       setEmail,
@@ -612,6 +700,7 @@ export function useMvpWorkflow() {
       setAssetType,
       setAssetPrompt,
       setNumVariants,
+      setAssetTone,
       setAnalysisAssistantInput,
     },
     actions,

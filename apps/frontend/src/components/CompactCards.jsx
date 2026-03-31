@@ -201,7 +201,7 @@ export function CompetitorCards({ analysis }) {
 
   const competitors = analysis.competitors || [];
   const market = analysis.market_overview || {};
-  const avgPriceLabel = ["Free", "$", "$$", "$$$", "$$$$"][Math.round(market.avg_price_level)] || "N/A";
+  const avgPriceLabel = market.avg_price_level > 0 ? ["", "$", "$$", "$$$", "$$$$"][Math.round(market.avg_price_level)] : "N/A";
   const densityLabel = DENSITY_LABEL[market.market_density] || market.market_density || "N/A";
   const densityColorCls = { low: "density-low", medium: "density-medium", high: "density-high" }[market.market_density] || "";
   const topThreat = competitors.find((c) => c.competitive_threat_level === "high") || null;
@@ -329,51 +329,61 @@ export function CompetitorCards({ analysis }) {
                     )}
                   </div>
 
-                  {/* AI Insights */}
-                  <div className="competitor-insights">
-                    {c.business_model && (
-                      <div className="insight-row">
-                        <span className="insight-label">Business Model</span>
-                        <span className="insight-value">{c.business_model}</span>
-                      </div>
-                    )}
-                    {c.pricing_notes && (
-                      <div className="insight-row insight-row-full">
-                        <span className="insight-label">Pricing</span>
-                        <span className="insight-value">{c.pricing_notes}</span>
-                      </div>
-                    )}
-                    {c.services_offered?.length > 0 && (
-                      <div className="insight-row">
-                        <span className="insight-label">Services</span>
-                        <span className="insight-value">{c.services_offered.join(" · ")}</span>
-                      </div>
-                    )}
-                    {c.special_services?.length > 0 && (
-                      <div className="insight-row">
-                        <span className="insight-label">Special</span>
-                        <span className="insight-value">{c.special_services.join(" · ")}</span>
-                      </div>
-                    )}
-                    {c.estimated_discounts?.length > 0 && (
-                      <div className="insight-row">
-                        <span className="insight-label">Discounts</span>
-                        <span className="insight-value">{c.estimated_discounts.join(" · ")}</span>
-                      </div>
-                    )}
-                    {c.how_they_compete && (
-                      <div className="insight-row insight-row-full">
-                        <span className="insight-label">Strategy</span>
-                        <span className="insight-value">{c.how_they_compete}</span>
-                      </div>
-                    )}
-                    {c.review_summary && (
-                      <div className="insight-row insight-row-full">
-                        <span className="insight-label">Customer Sentiment</span>
-                        <span className="insight-value">{c.review_summary}</span>
-                      </div>
-                    )}
-                  </div>
+                  {/* AI Insights — collapsed by default */}
+                  <details className="competitor-insights-details">
+                    <summary className="competitor-insights-summary">
+                      <span>View Details</span>
+                      <svg className="comp-insights-chevron" width="13" height="13" viewBox="0 0 24 24"
+                        fill="none" stroke="currentColor" strokeWidth="2.5"
+                        strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="6 9 12 15 18 9" />
+                      </svg>
+                    </summary>
+                    <div className="competitor-insights">
+                      {c.business_model && (
+                        <div className="insight-row">
+                          <span className="insight-label">Business Model</span>
+                          <span className="insight-value">{c.business_model}</span>
+                        </div>
+                      )}
+                      {c.pricing_notes && (
+                        <div className="insight-row insight-row-full">
+                          <span className="insight-label">Pricing</span>
+                          <span className="insight-value">{c.pricing_notes}</span>
+                        </div>
+                      )}
+                      {c.services_offered?.length > 0 && (
+                        <div className="insight-row">
+                          <span className="insight-label">Services</span>
+                          <span className="insight-value">{c.services_offered.join(" · ")}</span>
+                        </div>
+                      )}
+                      {c.special_services?.length > 0 && (
+                        <div className="insight-row">
+                          <span className="insight-label">Special</span>
+                          <span className="insight-value">{c.special_services.join(" · ")}</span>
+                        </div>
+                      )}
+                      {c.estimated_discounts?.length > 0 && (
+                        <div className="insight-row">
+                          <span className="insight-label">Discounts</span>
+                          <span className="insight-value">{c.estimated_discounts.join(" · ")}</span>
+                        </div>
+                      )}
+                      {c.how_they_compete && (
+                        <div className="insight-row insight-row-full">
+                          <span className="insight-label">Strategy</span>
+                          <span className="insight-value">{c.how_they_compete}</span>
+                        </div>
+                      )}
+                      {c.review_summary && (
+                        <div className="insight-row insight-row-full">
+                          <span className="insight-label">Customer Sentiment</span>
+                          <span className="insight-value">{c.review_summary}</span>
+                        </div>
+                      )}
+                    </div>
+                  </details>
 
                   {/* Review snippets */}
                   {c.review_snippets?.length > 0 && (
@@ -1272,44 +1282,291 @@ function CopyButton({ text }) {
   );
 }
 
+const VISUAL_TYPES = new Set(["logo", "poster", "banner", "social_visual", "social_media_visual"]);
+const TYPE_LABELS = {
+  social_post: "Social Media Post", instagram_caption: "Instagram Caption",
+  google_business_post: "Google Business Post", ad_copy: "Ad Copy",
+  sms_campaign: "SMS Campaign", email_newsletter: "Email Newsletter",
+  blog_post_intro: "Blog Post Intro", landing_page_copy: "Landing Page Copy",
+  press_release: "Press Release", logo: "Logo Concept",
+  poster: "Poster / Banner", social_visual: "Social Media Visual",
+};
+
+function CopyField({ label, text }) {
+  return (
+    <div className="ca-field">
+      <div className="ca-field-head">
+        <span className="ca-field-label">{label}</span>
+        <CopyButton text={text} />
+      </div>
+      <p className="ca-field-text">{text}</p>
+    </div>
+  );
+}
+
+function HashtagList({ tags = [] }) {
+  if (!tags.length) return null;
+  return (
+    <div className="ca-hashtags">
+      {tags.map((t, i) => (
+        <span key={i} className="ca-hashtag">{t.startsWith("#") ? t : `#${t}`}</span>
+      ))}
+    </div>
+  );
+}
+
+function TextAssetCard({ a, idx }) {
+  const meta = a.metadata || {};
+  const type = a.asset_type || "";
+
+  // Build full-card copy text
+  const allText = Object.values(meta)
+    .filter((v) => typeof v === "string")
+    .join("\n\n");
+
+  // Email newsletter
+  if (type === "email_newsletter") {
+    const sections = meta.sections || [];
+    return (
+      <article className="ca-asset-card">
+        <div className="ca-asset-head">
+          <span className="ca-asset-type">{TYPE_LABELS[type] || type}</span>
+          <CopyButton text={allText} />
+        </div>
+        <div className="ca-asset-body">
+          {meta.subject && <CopyField label="Subject Line" text={meta.subject} />}
+          {meta.preview_text && <CopyField label="Preview Text" text={meta.preview_text} />}
+          {sections.map((s, i) => (
+            <div key={i} className="ca-email-section">
+              {s.heading && <p className="ca-email-section-heading">{s.heading}</p>}
+              {s.body && <p className="ca-field-text">{s.body}</p>}
+            </div>
+          ))}
+          {meta.cta && <CopyField label="CTA" text={meta.cta} />}
+          {meta.ps_line && <CopyField label="P.S." text={meta.ps_line} />}
+        </div>
+      </article>
+    );
+  }
+
+  // Ad copy
+  if (type === "ad_copy") {
+    return (
+      <article className="ca-asset-card">
+        <div className="ca-asset-head">
+          <span className="ca-asset-type">{TYPE_LABELS[type] || type}</span>
+          <CopyButton text={allText} />
+        </div>
+        <div className="ca-asset-body">
+          <div className="ca-ad-headlines">
+            {[meta.headline_1, meta.headline_2, meta.headline_3].filter(Boolean).map((h, i) => (
+              <div key={i} className="ca-ad-headline-row">
+                <span className="ca-ad-h-num">H{i + 1}</span>
+                <span className="ca-ad-h-text">{h}</span>
+                <CopyButton text={h} />
+              </div>
+            ))}
+          </div>
+          {[meta.description_1, meta.description_2].filter(Boolean).map((d, i) => (
+            <CopyField key={i} label={`Description ${i + 1}`} text={d} />
+          ))}
+          {meta.cta && <CopyField label="CTA" text={meta.cta} />}
+          {meta.platform_notes && <p className="ca-field-text ca-muted">{meta.platform_notes}</p>}
+        </div>
+      </article>
+    );
+  }
+
+  // Blog post
+  if (type === "blog_post_intro") {
+    const outline = meta.outline || [];
+    const keywords = meta.keywords || [];
+    return (
+      <article className="ca-asset-card">
+        <div className="ca-asset-head">
+          <span className="ca-asset-type">{TYPE_LABELS[type] || type}</span>
+          <CopyButton text={allText} />
+        </div>
+        <div className="ca-asset-body">
+          {meta.title && <CopyField label="Title" text={meta.title} />}
+          {meta.meta_description && <CopyField label="Meta Description" text={meta.meta_description} />}
+          {meta.intro && <CopyField label="Intro" text={meta.intro} />}
+          {outline.length > 0 && (
+            <div className="ca-field">
+              <span className="ca-field-label">Outline</span>
+              <ol className="ca-outline-list">
+                {outline.map((item, i) => <li key={i}>{item}</li>)}
+              </ol>
+            </div>
+          )}
+          {keywords.length > 0 && (
+            <div className="ca-hashtags" style={{ marginTop: 8 }}>
+              {keywords.map((k, i) => <span key={i} className="ca-hashtag">{k}</span>)}
+            </div>
+          )}
+        </div>
+      </article>
+    );
+  }
+
+  // Landing page copy
+  if (type === "landing_page_copy") {
+    const sections = meta.sections || [];
+    const trust = meta.trust_signals || [];
+    return (
+      <article className="ca-asset-card">
+        <div className="ca-asset-head">
+          <span className="ca-asset-type">{TYPE_LABELS[type] || type}</span>
+          <CopyButton text={allText} />
+        </div>
+        <div className="ca-asset-body">
+          {meta.headline && <CopyField label="Headline" text={meta.headline} />}
+          {meta.subheadline && <CopyField label="Subheadline" text={meta.subheadline} />}
+          {sections.map((s, i) => (
+            <div key={i} className="ca-email-section">
+              {s.heading && <p className="ca-email-section-heading">{s.heading}</p>}
+              {s.body && <p className="ca-field-text">{s.body}</p>}
+            </div>
+          ))}
+          {meta.cta && <CopyField label="CTA" text={meta.cta} />}
+          {trust.length > 0 && (
+            <div className="ca-field">
+              <span className="ca-field-label">Trust Signals</span>
+              <ul className="ca-trust-list">
+                {trust.map((t, i) => <li key={i}>{t}</li>)}
+              </ul>
+            </div>
+          )}
+        </div>
+      </article>
+    );
+  }
+
+  // Social / Instagram / generic text
+  const caption = meta.caption || meta.body || meta.message || meta.intro || meta.lead_paragraph || "";
+  const hook = meta.hook || meta.subject || meta.headline || meta.title || "";
+  const hashtags = meta.hashtags || [];
+  const imagePrompt = meta.image_prompt || "";
+
+  return (
+    <article className="ca-asset-card">
+      <div className="ca-asset-head">
+        <span className="ca-asset-type">{TYPE_LABELS[type] || type}</span>
+        <CopyButton text={[hook, caption, meta.cta].filter(Boolean).join("\n\n")} />
+      </div>
+      <div className="ca-asset-body">
+        {hook && <CopyField label="Hook / Headline" text={hook} />}
+        {caption && <CopyField label="Caption / Body" text={caption} />}
+        {meta.cta && <CopyField label="CTA" text={meta.cta} />}
+        {hashtags.length > 0 && <HashtagList tags={hashtags} />}
+        {imagePrompt && (
+          <div className="ca-image-prompt">
+            <span className="ca-field-label">Suggested Visual</span>
+            <p className="ca-field-text ca-muted">{imagePrompt}</p>
+          </div>
+        )}
+      </div>
+    </article>
+  );
+}
+
+function downloadBase64Image(dataUrl, filename) {
+  const a = document.createElement("a");
+  a.href = dataUrl;
+  a.download = filename;
+  a.click();
+}
+
+function VisualAssetCard({ a, idx }) {
+  const meta = a.metadata || {};
+  const brief = meta.design_brief || {};
+  const type = a.asset_type || "";
+  const palette = brief.color_palette || [];
+  const imageData = meta.image_data || null;
+  const dalleError = meta.dalle_error || null;
+  const label = TYPE_LABELS[type] || type;
+
+  return (
+    <article className="vc-card">
+      {/* Image stage */}
+      <div className="vc-stage">
+        {imageData ? (
+          <>
+            <img src={imageData} alt={`${label} visual`} className="vc-image" />
+            <div className="vc-stage-overlay">
+              <span className="vc-badge">{label}</span>
+              <button
+                className="vc-dl-btn"
+                onClick={() => downloadBase64Image(imageData, `${type}-${a.id || idx}.png`)}
+                title="Download PNG"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+              </button>
+            </div>
+          </>
+        ) : (
+          <div className="vc-no-image">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="3" />
+              <circle cx="8.5" cy="8.5" r="1.5" />
+              <polyline points="21 15 16 10 5 21" />
+            </svg>
+            <span className="vc-badge" style={{ position: "static", marginTop: 12 }}>{label}</span>
+            <p className="vc-no-image-text">Image not generated</p>
+            {dalleError && <p className="vc-no-image-err">{dalleError}</p>}
+          </div>
+        )}
+      </div>
+
+      {/* Design Brief — collapsed by default */}
+      <details className="ca-brief-details">
+        <summary className="ca-brief-summary">Design Brief</summary>
+        <div className="ca-asset-body">
+          {brief.concept && <CopyField label="Concept" text={brief.concept} />}
+          {brief.style && <CopyField label="Style" text={brief.style} />}
+          {brief.mood && <CopyField label="Mood" text={brief.mood} />}
+          {brief.typography && <CopyField label="Typography" text={brief.typography} />}
+          {palette.length > 0 && (
+            <div className="ca-field">
+              <span className="ca-field-label">Colour Palette</span>
+              <div className="ca-palette">
+                {palette.map((hex, i) => (
+                  <div key={i} className="ca-swatch-wrap">
+                    <div className="ca-swatch" style={{ background: hex }} title={hex} />
+                    <span className="ca-swatch-hex">{hex}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {brief.usage_notes && <CopyField label="Usage Notes" text={brief.usage_notes} />}
+          {meta.dalle_prompt && (
+            <details className="ca-dalle-details">
+              <summary className="ca-dalle-summary">View DALL-E Prompt</summary>
+              <p className="ca-field-text ca-muted">{meta.dalle_prompt}</p>
+            </details>
+          )}
+        </div>
+      </details>
+    </article>
+  );
+}
+
 export function ContentAssetCards({ assets = [] }) {
   if (!assets.length) return null;
   return (
     <div className="ca-wrap">
-      {assets.map((a, idx) => {
-        const meta = a.metadata || {};
-        const title = meta.title || meta.headline || "";
-        const hook = meta.hook || meta.subject || "";
-        const body = meta.body || meta.caption || meta.description || meta.content || "";
-        const cta = meta.cta || "";
-        const copyText = [title, hook, body, cta].filter(Boolean).join("\n\n");
-
-        return (
-          <article key={a.id || idx} className="ca-asset-card">
-            {/* Card header */}
-            <div className="ca-asset-head">
-              <span className="ca-asset-type">{a.asset_type}</span>
-              <CopyButton text={copyText} />
-            </div>
-
-            {/* Content */}
-            <div className="ca-asset-body">
-              {title && <p className="ca-asset-title">{title}</p>}
-              {hook && <p className="ca-asset-hook">{hook}</p>}
-              {body && <p className="ca-asset-content">{body}</p>}
-              {cta && (
-                <div className="ca-asset-cta">
-                  <span className="ca-cta-label">CTA</span>
-                  <span className="ca-cta-text">{cta}</span>
-                </div>
-              )}
-              {!title && !body && !hook && !cta && (
-                <p className="ca-asset-empty">No content preview available.</p>
-              )}
-            </div>
-          </article>
-        );
-      })}
+      {assets.map((a, idx) =>
+        VISUAL_TYPES.has(a.asset_type)
+          ? <VisualAssetCard key={a.id || idx} a={a} idx={idx} />
+          : <TextAssetCard key={a.id || idx} a={a} idx={idx} />
+      )}
     </div>
   );
 }

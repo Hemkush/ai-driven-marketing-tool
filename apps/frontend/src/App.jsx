@@ -13,6 +13,7 @@ import QuestionnairePage from "./pages/QuestionnairePage";
 import ResearchPage from "./pages/ResearchPage";
 import RoadmapPage from "./pages/RoadmapPage";
 import StrategyPage from "./pages/StrategyPage";
+import VerifyEmailPage from "./pages/VerifyEmailPage";
 import { useMvpWorkflow } from "./state/useMvpWorkflow";
 
 export default function App() {
@@ -35,15 +36,15 @@ export default function App() {
 
   useEffect(() => {
     // Redirect unauthenticated users away from protected app routes
-    if (!state.me && location.pathname !== "/" && location.pathname !== "/login") {
+    const publicPaths = ["/", "/login", "/verify-email"];
+    if (!state.me && !publicPaths.includes(location.pathname)) {
       navigate("/", { replace: true });
     }
   }, [state.me, location.pathname, navigate]);
 
   if (!state.me) {
-    if (location.pathname === "/login") {
-      return <LoginPage workflow={workflow} />;
-    }
+    if (location.pathname === "/login") return <LoginPage workflow={workflow} />;
+    if (location.pathname === "/verify-email") return <VerifyEmailPage />;
     return <LandingPage workflow={workflow} />;
   }
 

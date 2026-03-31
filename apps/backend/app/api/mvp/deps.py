@@ -87,6 +87,7 @@ class ContentGenerationRequest(BaseModel):
     asset_type: str = Field(min_length=2, max_length=80)
     prompt_text: str = Field(min_length=2, max_length=5000)
     num_variants: int = Field(default=3, ge=1, le=5)
+    tone: str = Field(default="professional", max_length=40)
 
 
 # ── Auth / ownership helpers ───────────────────────────────────────────────────
