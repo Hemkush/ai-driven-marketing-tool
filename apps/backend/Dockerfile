@@ -12,8 +12,8 @@ COPY . .
 # Remove local dev .env so secrets come from Cloud Run environment variables only
 RUN rm -f .env
 
-EXPOSE 8000
+EXPOSE 8080
 
 # Cloud Run sends traffic to a single container; FastAPI is async so 1 worker
 # handles concurrent requests efficiently. Cloud Run scales via instances.
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--timeout-keep-alive", "75"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "1", "--timeout-keep-alive", "75"]
