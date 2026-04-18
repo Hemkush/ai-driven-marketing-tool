@@ -1,13 +1,19 @@
 import hashlib
 import json
+import logging
 import re
 
 from openai import OpenAI
 from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
+import numpy as np
+
 from app.core.config import settings
+from app.core.llm_tracker import tracked_embeddings
 from app.models import MemoryChunk
+
+logger = logging.getLogger(__name__)
 
 
 def _topic_from_question(question_text: str) -> str:
@@ -55,6 +61,7 @@ def _embed_texts(texts: list[str]) -> list[list[float] | None]:
     if not texts:
         return []
     if not settings.can_use_openai():
+        logger.warning("Embeddings skipped: OpenAI not available (missing API key or test mode)")
         return [None for _ in texts]
     try:
         client = OpenAI(
@@ -63,12 +70,19 @@ def _embed_texts(texts: list[str]) -> list[list[float] | None]:
             timeout=settings.openai_timeout_seconds,
             max_retries=settings.openai_max_retries,
         )
-        resp = client.embeddings.create(model=settings.openai_embedding_model, input=texts)
+        resp = tracked_embeddings(client, agent="memory_store",
+            model=settings.openai_embedding_model, input=texts)
         vectors = [item.embedding for item in (resp.data or [])]
         if len(vectors) != len(texts):
+            logger.error(
+                "Embedding count mismatch: sent %d texts, got %d vectors",
+                len(texts), len(vectors),
+            )
             return [None for _ in texts]
+        logger.info("Embeddings created successfully for %d chunks", len(vectors))
         return vectors
-    except Exception:
+    except Exception as exc:
+        logger.error("Embedding failed: %s", exc, exc_info=True)
         return [None for _ in texts]
 
 
@@ -161,7 +175,8 @@ def retrieve_relevant_memory(
                 timeout=settings.openai_timeout_seconds,
                 max_retries=settings.openai_max_retries,
             )
-            emb = client.embeddings.create(model=settings.openai_embedding_model, input=[q])
+            emb = tracked_embeddings(client, agent="memory_store_query",
+                model=settings.openai_embedding_model, input=[q])
             query_vector = emb.data[0].embedding
             try:
                 rows = (
@@ -172,19 +187,41 @@ def retrieve_relevant_memory(
                     .all()
                 )
                 if rows:
-                    return [
-                        {
+                    # Evaluate retrieval quality: compute cosine similarity scores
+                    q_vec = np.array(query_vector)
+                    q_norm = np.linalg.norm(q_vec)
+                    similarities = []
+                    chunks = []
+                    for r in rows:
+                        chunk = {
                             "id": r.id,
                             "topic_tag": r.topic_tag or "",
                             "content_text": r.content_text,
                             "metadata": json.loads(r.metadata_json or "{}"),
                         }
-                        for r in rows
-                    ]
-            except Exception:
-                pass
-        except Exception:
-            pass
+                        if r.embedding is not None:
+                            r_vec = np.array(r.embedding)
+                            r_norm = np.linalg.norm(r_vec)
+                            sim = float(np.dot(q_vec, r_vec) / (q_norm * r_norm)) if q_norm and r_norm else 0.0
+                            similarities.append(sim)
+                            chunk["similarity"] = round(sim, 4)
+                        chunks.append(chunk)
+                    if similarities:
+                        avg_sim = round(sum(similarities) / len(similarities), 4)
+                        min_sim = round(min(similarities), 4)
+                        logger.info("retrieval_quality", extra={
+                            "project_id": project_id,
+                            "chunks_returned": len(rows),
+                            "avg_similarity": avg_sim,
+                            "min_similarity": min_sim,
+                            "low_relevance": min_sim < 0.75,
+                        })
+                    return chunks
+                logger.warning("Semantic search returned 0 rows (all embeddings may be NULL)")
+            except Exception as exc:
+                logger.error("Semantic similarity search failed: %s", exc, exc_info=True)
+        except Exception as exc:
+            logger.error("Query embedding failed, falling back to lexical search: %s", exc, exc_info=True)
 
     try:
         rows = (

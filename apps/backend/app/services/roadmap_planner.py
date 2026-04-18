@@ -3,6 +3,8 @@ import json
 from openai import OpenAI
 
 from app.core.config import settings
+from app.core.llm_tracker import tracked_responses
+from app.core.quality_scorer import score_roadmap
 
 
 def _fallback_roadmap(
@@ -97,7 +99,7 @@ def generate_roadmap_plan(
             timeout=15,
             max_retries=0,
         )
-        resp = client.responses.create(
+        resp = tracked_responses(client, agent="roadmap_planner",
             model=settings.openai_model,
             input=prompt,
         )
@@ -113,6 +115,7 @@ def generate_roadmap_plan(
         }
         if not required.issubset(parsed.keys()):
             return _fallback_roadmap(project_name, strategy, personas)
+        score_roadmap(parsed)
         return parsed
     except Exception:
         return _fallback_roadmap(project_name, strategy, personas)

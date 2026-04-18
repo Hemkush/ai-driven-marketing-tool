@@ -34,6 +34,8 @@ class Settings:
     memory_top_k: int = int(os.getenv("MEMORY_TOP_K", "6"))
     google_places_api_key: str | None = os.getenv("GOOGLE_PLACES_API_KEY")
     benchmarking_radius_meters: int = int(os.getenv("BENCHMARKING_RADIUS_METERS", "5000"))
+    sentry_dsn: str | None = os.getenv("SENTRY_DSN")
+    sentry_environment: str = os.getenv("SENTRY_ENVIRONMENT", "production")
 
     def validate_openai(self) -> None:
         if not self.openai_api_key:

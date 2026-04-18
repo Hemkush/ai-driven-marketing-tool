@@ -6392,12 +6392,14 @@ button:hover {
 }
 .cb-structured-list {
   margin: 0;
-  padding-left: 16px;
+  padding-left: 0;
   display: flex;
   flex-direction: column;
   gap: 4px;
+  list-style: none;
 }
-.cb-structured-list li { font-size: 13px; color: #cbd5e1; line-height: 1.5; }
+.cb-structured-list li { font-size: 13px; color: #cbd5e1; line-height: 1.5; display: flex; gap: 6px; align-items: flex-start; }
+.cb-bullet-dot { color: #94a3b8; flex-shrink: 0; margin-top: 1px; }
 .cb-structured-para { font-size: 13px; color: #cbd5e1; margin: 0; line-height: 1.55; }
 .cb-structured-block { display: flex; flex-direction: column; gap: 5px; }
 

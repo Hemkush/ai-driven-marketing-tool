@@ -25,6 +25,44 @@ class User(Base):
     projects: Mapped[list[Project]] = relationship(back_populates="owner")
 
 
+class PipelineRun(Base):
+    """Traces every agent invocation — start time, end time, status, tokens used.
+
+    Lets you answer: which step do users drop off at? Which agent is slowest?
+    What's the end-to-end time for a full pipeline run?
+    """
+    __tablename__ = "pipeline_runs"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    project_id: Mapped[int | None] = mapped_column(ForeignKey("projects.id"), nullable=True, index=True)
+    step: Mapped[str] = mapped_column(String(100), nullable=False)      # e.g. "competitive_benchmarker"
+    status: Mapped[str] = mapped_column(String(20), nullable=False)     # success | error | cached
+    started_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=False)
+    completed_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=True)
+    duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    error_msg: Mapped[str | None] = mapped_column(Text, nullable=True)
+    extra_json: Mapped[str | None] = mapped_column(Text, nullable=True)  # tokens, cache_key, etc.
+
+
+class LLMCache(Base):
+    """DB-backed response cache for expensive LLM + API calls.
+
+    cache_key  = SHA256(agent + sorted canonical input)
+    payload    = JSON-serialised LLM output
+    TTL is enforced in application code (not a DB constraint) so old rows
+    can be queried for analytics / audit before being pruned.
+    """
+    __tablename__ = "llm_cache"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    cache_key: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
+    agent: Mapped[str] = mapped_column(String(100), nullable=False)
+    payload_json: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[DateTime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
 class PendingRegistration(Base):
     """Holds signups until email is verified. Deleted on verify or expiry."""
     __tablename__ = "pending_registrations"

@@ -1,9 +1,10 @@
 """
 Competitive Benchmarking Service
-Pipeline: Geocode → Google Places Nearby Search → Place Details → OpenAI Enrichment
+Pipeline: Geocode → Google Places Nearby Search → Embedding Rank → Place Details (top 5) → OpenAI Enrichment
 """
 import json
 import logging
+import numpy as np
 
 import httpx
 from openai import OpenAI
@@ -11,6 +12,8 @@ from openai import OpenAI
 logger = logging.getLogger(__name__)
 
 from app.core.config import settings
+from app.core.llm_tracker import tracked_chat, tracked_embeddings, tracked_responses
+from app.core.quality_scorer import score_competitive_benchmarking
 
 GEOCODING_URL = "https://maps.googleapis.com/maps/api/geocode/json"
 TEXT_SEARCH_URL = "https://maps.googleapis.com/maps/api/place/textsearch/json"
@@ -111,7 +114,8 @@ def _infer_business_keyword(
                     timeout=10,
                     max_retries=1,
                 )
-                resp = client.responses.create(model=settings.openai_model, input=prompt)
+                resp = tracked_responses(client, agent="competitive_benchmarker_keyword",
+                    model=settings.openai_model, input=prompt)
                 keyword = _response_to_text(resp).strip().lower()
                 keyword = keyword.splitlines()[0].strip("\"'").strip()
                 if keyword and len(keyword) <= 80:
@@ -140,7 +144,8 @@ def _infer_business_keyword(
                 timeout=15,
                 max_retries=1,
             )
-            resp = client.responses.create(model=settings.openai_model, input=prompt)
+            resp = tracked_responses(client, agent="competitive_benchmarker_keyword",
+                model=settings.openai_model, input=prompt)
             keyword = _response_to_text(resp).strip().lower()
             keyword = keyword.splitlines()[0].strip("\"'").strip()
             if keyword and len(keyword) <= 80:
@@ -258,6 +263,76 @@ def _build_interview_context(responses: list[dict]) -> str:
     return "\n\n".join(lines)
 
 
+def _competitor_to_text(place: dict) -> str:
+    """Convert basic place data (from nearby search) into a short text for embedding."""
+    parts = [place.get("name", "")]
+    types = (place.get("types") or [])[:4]
+    if types:
+        parts.append(" ".join(t.replace("_", " ") for t in types))
+    vicinity = place.get("vicinity") or place.get("formatted_address", "")
+    if vicinity:
+        parts.append(vicinity)
+    rating = place.get("rating")
+    if rating is not None:
+        parts.append(f"rating {rating}")
+    return " | ".join(p for p in parts if p)
+
+
+def _rank_by_relevance(
+    places: list[dict],
+    business_context: str,
+    top_n: int = 5,
+) -> list[dict]:
+    """
+    Embed each competitor's basic profile + the business context, then rank by
+    cosine similarity. Returns top_n most relevant competitors.
+
+    Uses text-embedding-3-small (~$0.02/1M tokens) — much cheaper than sending
+    all competitors through gpt-4o-mini.
+
+    Falls back to rating-based ordering if embeddings fail.
+    """
+    if not settings.can_use_openai() or not places:
+        return places[:top_n]
+
+    try:
+        client = OpenAI(
+            api_key=settings.openai_api_key,
+            base_url=settings.openai_base_url,
+            timeout=20,
+            max_retries=1,
+        )
+        competitor_texts = [_competitor_to_text(p) for p in places]
+        all_texts = [business_context] + competitor_texts
+
+        resp = tracked_embeddings(client, agent="competitive_benchmarker",
+            model=settings.openai_embedding_model,
+            input=all_texts,
+        )
+        vectors = [item.embedding for item in resp.data]
+        query_vec = np.array(vectors[0])
+        competitor_vecs = [np.array(v) for v in vectors[1:]]
+
+        def cosine_sim(a: np.ndarray, b: np.ndarray) -> float:
+            denom = np.linalg.norm(a) * np.linalg.norm(b)
+            return float(np.dot(a, b) / denom) if denom > 0 else 0.0
+
+        scored = [
+            (cosine_sim(query_vec, cv), place)
+            for cv, place in zip(competitor_vecs, places)
+        ]
+        scored.sort(key=lambda x: x[0], reverse=True)
+        logger.info(
+            "Embedding ranking: top scores %s",
+            [round(s, 3) for s, _ in scored[:top_n]],
+        )
+        return [place for _, place in scored[:top_n]]
+
+    except Exception as exc:
+        logger.warning("Embedding ranking failed, falling back to rating order: %s", exc)
+        return places[:top_n]
+
+
 def _enrich_with_ai(
     competitors: list[dict],
     interview_context: str,
@@ -268,10 +343,10 @@ def _enrich_with_ai(
     if not settings.can_use_openai() or not competitors:
         return {}
 
-    # Build compact summaries for the prompt
+    # Build compact summaries for the prompt — cap at 8 competitors to keep prompt size manageable
     summaries = []
-    for c in competitors:
-        reviews = [r.get("text", "") for r in (c.get("reviews") or []) if r.get("text")]
+    for c in competitors[:8]:
+        reviews = [r.get("text", "")[:120] for r in (c.get("reviews") or []) if r.get("text")]
         editorial = c.get("editorial_summary") or {}
         editorial_text = (
             editorial.get("overview", "")
@@ -286,8 +361,8 @@ def _enrich_with_ai(
             "price_level": c.get("price_level"),
             "price_label": PRICE_LEVEL_LABELS.get(c.get("price_level"), ""),
             "types": (c.get("types") or [])[:4],
-            "editorial_summary": editorial_text,
-            "review_snippets": reviews[:3],
+            "editorial_summary": editorial_text[:200],
+            "review_snippets": reviews[:2],
             "hours": (c.get("opening_hours") or {}).get("weekday_text", [])
             if isinstance(c.get("opening_hours"), dict)
             else [],
@@ -354,10 +429,10 @@ def _enrich_with_ai(
         client = OpenAI(
             api_key=settings.openai_api_key,
             base_url=settings.openai_base_url,
-            timeout=settings.openai_timeout_seconds,
+            timeout=120,  # competitive benchmarking prompt is large — needs longer timeout
             max_retries=settings.openai_max_retries,
         )
-        resp = client.chat.completions.create(
+        resp = tracked_chat(client, agent="competitive_benchmarker",
             model=settings.openai_model,
             response_format={"type": "json_object"},
             messages=[{"role": "user", "content": prompt}],
@@ -366,6 +441,7 @@ def _enrich_with_ai(
         logger.info("AI enrichment raw response (first 500 chars): %s", raw[:500])
         result = _extract_json(raw) or {}
         logger.info("AI enrichment keys returned: %s", list(result.keys()))
+        score_competitive_benchmarking(result)
         return result
     except Exception as exc:
         logger.error("AI enrichment failed: %s", exc, exc_info=True)
@@ -446,13 +522,23 @@ def run_competitive_benchmarking(
 
     diagnostics["raw_places_count"] = len(raw_places)
 
-    # Sort by rating descending and take top 10
+    # Sort by rating descending as a baseline before embedding ranking
     raw_places.sort(key=lambda x: float(x.get("rating") or 0), reverse=True)
-    raw_places = raw_places[:10]
+    raw_places = raw_places[:20]  # keep up to 20 candidates for embedding to rank
 
-    # Fetch place details for each
+    # --- Embedding-based ranking: pick the 5 most relevant competitors cheaply ---
+    # We embed basic place data (name + types + vicinity) vs the business context.
+    # This costs ~$0.0001 and avoids fetching Place Details for irrelevant places,
+    # which in turn keeps the final LLM prompt small and fast.
+    interview_context = _build_interview_context(responses)
+    business_context = f"{business_keyword} in {business_address or 'local area'}. {interview_context[:400]}"
+    top_places = _rank_by_relevance(raw_places, business_context, top_n=5)
+    diagnostics["places_after_embedding_rank"] = len(top_places)
+    logger.info("Embedding ranking reduced %d candidates to %d", len(raw_places), len(top_places))
+
+    # Fetch Place Details only for the top 5 (saves Google Places API quota too)
     detailed: list[dict] = []
-    for place in raw_places:
+    for place in top_places:
         place_id = place.get("place_id", "")
         if place_id:
             details = _fetch_place_details(place_id)
@@ -466,8 +552,7 @@ def run_competitive_benchmarking(
     avg_rating = round(sum(ratings) / len(ratings), 1) if ratings else None
     avg_price_level = round(sum(prices) / len(prices), 1) if prices else None
 
-    # AI enrichment
-    interview_context = _build_interview_context(responses)
+    # AI enrichment — now only 5 competitors with full details
     enrichment = _enrich_with_ai(detailed, interview_context, business_address or "", business_keyword)
 
     ai_by_name = {c["name"]: c for c in (enrichment.get("competitors") or [])}

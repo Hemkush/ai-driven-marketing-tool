@@ -1,10 +1,14 @@
 import json
+import logging
 import re
 from datetime import datetime, timezone
 
 from openai import OpenAI
 
 from app.core.config import settings
+from app.core.llm_tracker import tracked_responses
+
+logger = logging.getLogger(__name__)
 
 
 DEFAULT_QUESTIONS = [
@@ -454,7 +458,7 @@ def generate_next_questions_structured(
             timeout=15,
             max_retries=0,
         )
-        resp = client.responses.create(
+        resp = tracked_responses(client, agent="onboarding_interviewer",
             model=settings.openai_model,
             input=prompt,
         )
@@ -544,7 +548,8 @@ def generate_next_chat_question(responses: list[dict]) -> dict:
             timeout=15,
             max_retries=0,
         )
-        resp = client.responses.create(model=settings.openai_model, input=prompt)
+        resp = tracked_responses(client, agent="onboarding_interviewer",
+            model=settings.openai_model, input=prompt)
         raw = _response_to_text(resp)
         parsed = _extract_json_from_text(raw) or {}
         question_text = str(parsed.get("question_text", "")).strip()
@@ -693,7 +698,8 @@ def analyze_chat_response(
             timeout=15,
             max_retries=0,
         )
-        resp = client.responses.create(model=settings.openai_model, input=prompt)
+        resp = tracked_responses(client, agent="onboarding_interviewer",
+            model=settings.openai_model, input=prompt)
         raw = _response_to_text(resp)
         data = _extract_json_from_text(raw)
         if not isinstance(data, dict):

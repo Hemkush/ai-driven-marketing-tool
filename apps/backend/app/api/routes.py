@@ -1,6 +1,3 @@
-import secrets
-from datetime import datetime, timedelta, timezone
-
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
@@ -14,8 +11,7 @@ from app.core.auth import (
 from app.core.rate_limit import limiter
 from app.core.security import require_internal_api_key
 from app.db import get_db
-from app.models import Generation, PendingRegistration, Project, User
-from app.services.email_sender import send_verification_email
+from app.models import Generation, Project, User
 from app.services.generator import generate_campaign_brief, generate_channel_assets
 from app.services.storage import list_generations, save_generation
 
@@ -73,33 +69,20 @@ def ping():
 def register(payload: RegisterRequest, db: Session = Depends(get_db)):
     email = payload.email.lower()
 
-    # Block if already a verified user
     if db.query(User).filter(User.email == email).first():
         raise HTTPException(status_code=409, detail="Email already registered")
 
-    token = secrets.token_urlsafe(48)
-    expires_at = datetime.now(timezone.utc) + timedelta(hours=24)
-
-    # Upsert pending registration — allows retry if previous attempt expired
-    pending = db.query(PendingRegistration).filter(PendingRegistration.email == email).first()
-    if pending:
-        pending.password_hash = hash_password(payload.password)
-        pending.full_name = payload.full_name
-        pending.token = token
-        pending.expires_at = expires_at
-    else:
-        pending = PendingRegistration(
-            email=email,
-            password_hash=hash_password(payload.password),
-            full_name=payload.full_name,
-            token=token,
-            expires_at=expires_at,
-        )
-        db.add(pending)
+    user = User(
+        email=email,
+        password_hash=hash_password(payload.password),
+        full_name=payload.full_name,
+    )
+    db.add(user)
     db.commit()
+    db.refresh(user)
 
-    email_sent = send_verification_email(email, token)
-    return {"email": email, "email_sent": email_sent}
+    access_token = create_access_token(user.id)
+    return {"access_token": access_token, "token_type": "bearer"}
 
 
 @router.post("/auth/login")
@@ -107,10 +90,6 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
     email = payload.email.lower()
     user = db.query(User).filter(User.email == email).first()
     if not user or not verify_password(payload.password, user.password_hash):
-        # Check if they registered but never verified
-        pending = db.query(PendingRegistration).filter(PendingRegistration.email == email).first()
-        if pending:
-            raise HTTPException(status_code=403, detail="EMAIL_NOT_VERIFIED")
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     token = create_access_token(user.id)

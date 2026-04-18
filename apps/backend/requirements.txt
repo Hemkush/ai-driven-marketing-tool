@@ -29,6 +29,7 @@ pydantic==2.12.5
 pydantic-settings==2.13.1
 pydantic_core==2.41.5
 pgvector==0.4.1
+numpy>=1.26.0
 Pygments==2.19.2
 pytest==9.0.2
 pytest-asyncio==1.3.0
@@ -45,4 +46,5 @@ uvicorn==0.41.0
 wrapt==2.1.1
 PyJWT==2.10.1
 email-validator==2.2.0
+sentry-sdk[fastapi]==2.29.1
 

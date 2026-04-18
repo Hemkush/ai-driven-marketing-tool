@@ -138,17 +138,17 @@ export function useMvpWorkflow() {
         if (!companyName.trim()) {
           throw new Error("Company/organization name is required");
         }
-        const data = await authClient.register({
+        const auth = await authClient.register({
           email,
           password,
           full_name: companyName.trim(),
         });
-        setPendingVerificationEmail(email);
-        setMsg(
-          data.email_sent
-            ? `Verification email sent to ${email}. Please check your inbox.`
-            : `Account created. Check your inbox at ${email} to verify.`
-        );
+        setAuthToken(auth.access_token);
+        const [meData, items] = await Promise.all([authClient.me(), projectClient.list()]);
+        setMe(meData);
+        setProjects(items);
+        setActiveProjectId(items.length ? String(items[0].id) : "");
+        setMsg("Account created. Welcome!");
       }, "Registering..."),
 
     login: async () =>

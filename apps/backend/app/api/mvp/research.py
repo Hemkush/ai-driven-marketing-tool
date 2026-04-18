@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.auth import get_current_user
+from app.core.pipeline_tracer import trace_step
 from app.db import get_db
 from app.models import (
     QuestionnaireResponse,
@@ -64,12 +65,13 @@ def run_research_contract(
         }
         for r in responses
     ]
-    research_payload = generate_research_report(
-        project_name=project.name,
-        questionnaire_responses=response_payload,
-        analysis_report=json.loads(analysis_report.report_json),
-        business_address=project.business_address,
-    )
+    with trace_step(db, step="market_researcher", project_id=business_profile_id):
+        research_payload = generate_research_report(
+            project_name=project.name,
+            questionnaire_responses=response_payload,
+            analysis_report=json.loads(analysis_report.report_json),
+            business_address=project.business_address,
+        )
 
     report = ResearchReport(
         project_id=business_profile_id,

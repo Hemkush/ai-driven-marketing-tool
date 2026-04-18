@@ -1,9 +1,15 @@
 import json
+import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.auth import get_current_user
+from app.core.pipeline_tracer import trace_step
+
+logger = logging.getLogger(__name__)
+from app.core.response_cache import get_cached, make_cache_key, set_cached
 from app.db import get_db
 from app.models import (
     AnalysisReport,
@@ -75,11 +81,22 @@ def run_analysis_contract(
         except Exception:
             pass
 
-    report_payload = run_competitive_benchmarking(
-        response_payload,
-        business_address=project.business_address,
-        conversation_analysis=conversation_analysis,
-    )
+    cache_key = make_cache_key("competitive_benchmarker", {
+        "address": project.business_address or "",
+        "responses": response_payload,
+    })
+    report_payload = get_cached(db, cache_key, ttl_hours=24)
+    if report_payload is None:
+        with trace_step(db, step="competitive_benchmarker", project_id=business_profile_id):
+            report_payload = run_competitive_benchmarking(
+                response_payload,
+                business_address=project.business_address,
+                conversation_analysis=conversation_analysis,
+            )
+        set_cached(db, cache_key, agent="competitive_benchmarker", payload=report_payload)
+    else:
+        logger.info("pipeline_step", extra={"step": "competitive_benchmarker",
+            "project_id": business_profile_id, "status": "cached"})
 
     report = AnalysisReport(
         project_id=business_profile_id,
@@ -134,17 +151,23 @@ def query_analysis_assistant(
         )
 
     response_payload = _compact_discovery_responses(responses, max_items=10)
+    analysis_payload = json.loads(analysis_report.report_json)
+
+    # Run memory retrieval (embedding API call) in parallel with response_payload build
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        memory_future = executor.submit(
+            retrieve_relevant_memory,
+            db, business_profile_id, payload.message,
+        )
+        memory_context_chunks = memory_future.result()
+
     assistant = answer_analysis_question(
         question=payload.message,
-        analysis_report=json.loads(analysis_report.report_json),
+        analysis_report=analysis_payload,
         discovery_responses=response_payload,
         business_address=project.business_address,
         chat_history=payload.history,
-        memory_context_chunks=retrieve_relevant_memory(
-            db,
-            project_id=business_profile_id,
-            query=payload.message,
-        ),
+        memory_context_chunks=memory_context_chunks,
     )
     return {
         "business_profile_id": business_profile_id,

@@ -3,6 +3,7 @@ import json
 from openai import OpenAI
 
 from app.core.config import settings
+from app.core.llm_tracker import tracked_responses
 
 
 def _fallback_research(
@@ -107,7 +108,7 @@ def generate_research_report(
             timeout=15,
             max_retries=0,
         )
-        resp = client.responses.create(
+        resp = tracked_responses(client, agent="market_researcher",
             model=settings.openai_model,
             input=prompt,
         )

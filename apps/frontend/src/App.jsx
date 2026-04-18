@@ -24,14 +24,14 @@ export default function App() {
   const sessionProgress = state.selectedProjectSessionWorkflow?.progress || {};
   const progress = {
     "/projects": Boolean(state.activeProjectId),
-    "/questionnaire": sessionProgress["/questionnaire"] ?? Boolean(state.interviewCompleted),
-    "/analysis": sessionProgress["/analysis"] ?? Boolean(state.analysis),
-    "/positioning": sessionProgress["/positioning"] ?? Boolean(state.positioning),
-    "/personas": sessionProgress["/personas"] ?? Boolean(state.personas.length),
-    "/research": sessionProgress["/research"] ?? Boolean(state.research),
-    "/strategy": sessionProgress["/strategy"] ?? Boolean(state.strategy),
-    "/roadmap": sessionProgress["/roadmap"] ?? Boolean(state.roadmap),
-    "/content": sessionProgress["/content"] ?? Boolean(state.contentAssets.length),
+    "/questionnaire": Boolean(sessionProgress["/questionnaire"]) || Boolean(state.interviewCompleted),
+    "/analysis": Boolean(sessionProgress["/analysis"]) || Boolean(state.analysis),
+    "/positioning": Boolean(sessionProgress["/positioning"]) || Boolean(state.positioning),
+    "/personas": Boolean(sessionProgress["/personas"]) || Boolean(state.personas.length),
+    "/research": Boolean(sessionProgress["/research"]) || Boolean(state.research),
+    "/strategy": Boolean(sessionProgress["/strategy"]) || Boolean(state.strategy),
+    "/roadmap": Boolean(sessionProgress["/roadmap"]) || Boolean(state.roadmap),
+    "/content": Boolean(sessionProgress["/content"]) || Boolean(state.contentAssets.length),
   };
 
   useEffect(() => {

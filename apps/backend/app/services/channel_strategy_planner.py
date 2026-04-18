@@ -3,6 +3,8 @@ import json
 from openai import OpenAI
 
 from app.core.config import settings
+from app.core.llm_tracker import tracked_responses
+from app.core.quality_scorer import score_channel_strategy
 
 
 def _fallback_strategy(
@@ -96,7 +98,7 @@ def generate_channel_strategy(
             timeout=15,
             max_retries=0,
         )
-        resp = client.responses.create(
+        resp = tracked_responses(client, agent="channel_strategy_planner",
             model=settings.openai_model,
             input=prompt,
         )
@@ -111,6 +113,7 @@ def generate_channel_strategy(
         }
         if not required.issubset(parsed.keys()):
             return _fallback_strategy(project_name, personas, research_report)
+        score_channel_strategy(parsed)
         return parsed
     except Exception:
         return _fallback_strategy(project_name, personas, research_report)

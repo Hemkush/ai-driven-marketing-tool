@@ -1,734 +1,1104 @@
-# MarketPilot — Developer Handoff Report
+# Developer Handoff — AI-Driven Marketing Tool (MarketPilot)
 
-**Project:** AI-Driven Marketing Tool (MarketPilot)
-**Report Date:** March 2026
-**Purpose:** Complete technical handoff for any developer joining this project
+> Last updated: April 2026  
+> Stack: React + Vite · FastAPI · PostgreSQL (Supabase) · OpenAI · Google Places API · Resend · Cloud Run · Firebase Hosting
 
 ---
 
 ## Table of Contents
 
-1. [What This Product Is](#1-what-this-product-is)
-2. [Who It Is For](#2-who-it-is-for)
+1. [Product Overview](#1-product-overview)
+2. [Architecture](#2-architecture)
 3. [Tech Stack](#3-tech-stack)
-4. [Repository Structure](#4-repository-structure)
-5. [Local Development Setup](#5-local-development-setup)
-6. [Environment Variables](#6-environment-variables)
+4. [Project Structure](#4-project-structure)
+5. [Backend Deep Dive](#5-backend-deep-dive)
+6. [Frontend Deep Dive](#6-frontend-deep-dive)
 7. [Database Schema](#7-database-schema)
-8. [Alembic Migrations](#8-alembic-migrations)
-9. [The 9-Step Workflow Pipeline](#9-the-9-step-workflow-pipeline)
-10. [Backend Services Reference](#10-backend-services-reference)
-11. [API Endpoints Reference](#11-api-endpoints-reference)
-12. [Frontend Architecture](#12-frontend-architecture)
-13. [Authentication System](#13-authentication-system)
-14. [Competitive Benchmarking Pipeline](#14-competitive-benchmarking-pipeline)
-15. [Memory System (pgvector)](#15-memory-system-pgvector)
-16. [Key Decisions and Why](#16-key-decisions-and-why)
-17. [Known Gotchas and Quirks](#17-known-gotchas-and-quirks)
-18. [What Is Not Built Yet](#18-what-is-not-built-yet)
+8. [Authentication System](#8-authentication-system)
+9. [Email Verification Flow](#9-email-verification-flow)
+10. [AI Integration](#10-ai-integration)
+11. [Deployment](#11-deployment)
+12. [Environment Variables](#12-environment-variables)
+13. [Special Cases & Gotchas](#13-special-cases--gotchas)
+14. [Observability, Evaluation & Optimization](#14-observability-evaluation--optimization)
+15. [Interview Q&A](#15-interview-qa)
 
 ---
 
-## 1. What This Product Is
+## 1. Product Overview
 
-MarketPilot is a full-stack AI-powered marketing strategy tool for small and mid-size business (SMB) owners. It guides business owners through a structured 9-step workflow to produce a complete, AI-generated marketing strategy — from initial business discovery through to content-ready marketing assets.
+MarketPilot is an AI-powered marketing tool for small businesses. It lets users:
 
-The product asks the business owner questions about their business through an AI-driven chat interview, then progressively generates:
+- **Onboard** via a conversational AI questionnaire that learns their business
+- **Generate** marketing campaign briefs, channel assets, personas, and roadmaps
+- **Research** competitors using Google Places API + AI enrichment (SWOT, pricing, hours gaps)
+- **Create content** — social posts, email newsletters, ad copy, blog intros, logo concepts, posters, and more — with tone and audience controls
+- **Benchmark** against local competitors with a price-quality map, SWOT analysis, and opportunity gap analysis
 
-- A local competitor benchmarking report (using Google Places API + OpenAI)
-- A positioning statement and tagline
-- Buyer personas grounded in real competitor reviews
-- Market research
-- A channel strategy
-- A 90-day execution roadmap
-- Campaign content assets (social posts, copy, etc.)
-
-Every output is tied to the session in which it was generated, so re-running any step produces a new version without destroying prior work.
+Each user can have multiple **Projects** (business profiles) and all generated content is stored per-project.
 
 ---
 
-## 2. Who It Is For
+## 2. Architecture
 
-The end user is a **non-technical small business owner** — e.g. a hair salon owner, a florist, a landscaper, a plumber. They have no marketing background. The product does all the strategic thinking for them and presents outputs in plain language.
+```
+┌─────────────────────────────────────────────────────────────┐
+│                        USER BROWSER                         │
+│              React SPA (Firebase Hosting)                   │
+│         https://ai-marketing-prod.web.app                   │
+└─────────────────────┬───────────────────────────────────────┘
+                      │ HTTPS (REST + JSON)
+                      ▼
+┌─────────────────────────────────────────────────────────────┐
+│                   BACKEND (Cloud Run)                       │
+│              FastAPI · Python 3.12 · uvicorn                │
+│         https://backend-[hash]-uc.a.run.app                 │
+│                                                             │
+│  ┌──────────┐  ┌──────────┐  ┌──────────────────────────┐  │
+│  │  routes  │  │  mvp/    │  │  services/               │  │
+│  │ (auth,   │  │ (quest-  │  │ generator, content_studio│  │
+│  │  projects│  │  ionnaire│  │ competitive_benchmarker  │  │
+│  │  generate│  │  analysis│  │ persona_builder, etc.    │  │
+│  │  )       │  │  content │  │                          │  │
+│  └──────────┘  └──────────┘  └──────────────────────────┘  │
+└──────┬────────────────────────────┬────────────────────────┘
+       │                            │
+       ▼                            ▼
+┌─────────────┐            ┌─────────────────┐
+│  Supabase   │            │   OpenAI API    │
+│  PostgreSQL │            │  gpt-4o-mini    │
+│  + pgvector │            │  text-embedding │
+└─────────────┘            └─────────────────┘
+                                    │
+                           ┌─────────────────┐
+                           │ Google Places   │
+                           │     API         │
+                           └─────────────────┘
+```
 
-The product is built by a **solo developer + Claude AI** pair. All major implementation decisions were made iteratively in conversation with Claude Code.
+**Data flow:** Browser → Cloud Run (FastAPI) → Supabase (persistence) + OpenAI (generation) + Google Places (competitor data)
 
 ---
 
 ## 3. Tech Stack
 
-| Layer | Technology | Version |
+### Backend
+| Technology | Version | Purpose |
 |---|---|---|
-| Frontend | React | 19.2.0 |
-| Frontend Router | React Router DOM | 7.13.1 |
-| Frontend HTTP | Axios | 1.13.6 |
-| Frontend Build | Vite | 7.x |
-| Backend | FastAPI | 0.133.1 |
-| Backend Server | Uvicorn | 0.41.0 |
-| ORM | SQLAlchemy | 2.0.47 |
-| DB Driver | psycopg (v3) | 3.3.3 |
-| Database | PostgreSQL | 14+ |
-| Vector Extension | pgvector | 0.4.1 |
-| Migrations | Alembic | 1.18.4 |
-| AI Provider | OpenAI API | SDK 2.24.0 |
-| AI Model | gpt-4o-mini | (configurable) |
-| Embeddings | text-embedding-3-small | 1536 dimensions |
-| Competitor Data | Google Places API | v1 (REST) |
-| Rate Limiting | SlowAPI | 0.1.9 |
-| Validation | Pydantic | 2.12.5 |
-| Testing | Pytest | 9.0.2 |
+| Python | 3.12 | Language |
+| FastAPI | Latest | Web framework |
+| uvicorn | Latest | ASGI server (1 worker on Cloud Run) |
+| SQLAlchemy | 2.x | ORM with mapped columns |
+| Alembic | Latest | Database migrations |
+| psycopg (v3) | Latest | PostgreSQL driver (`psycopg`, not `psycopg2`) |
+| pgvector | Latest | Vector embeddings for memory store |
+| OpenAI SDK | Latest | LLM + embeddings |
+| slowapi | Latest | Rate limiting (10 req/min on generate endpoints) |
+| prometheus-fastapi-instrumentator | Latest | `/metrics` endpoint for monitoring |
+| sentry-sdk[fastapi] | 2.29.1 | Error tracking + alerting |
+| numpy | ≥1.26.0 | Cosine similarity for embedding ranking |
+| Resend API | REST | Transactional email (verification emails) |
+| python-dotenv | Latest | `.env` loading |
 
-**No charting library is used on the frontend.** The Price vs Rating scatter chart is built with raw SVG inside React.
+### Frontend
+| Technology | Version | Purpose |
+|---|---|---|
+| React | 18 | UI framework |
+| Vite | Latest | Build tool + dev server |
+| Custom hook | — | State management via `useMvpWorkflow.js` |
+| React Router | Latest | Client-side routing |
+| Tailwind CSS | Latest | Styling |
+| Lucide React | Latest | Icon library |
+| Axios | Latest | HTTP client with interceptors |
+
+### Infrastructure
+| Service | Purpose |
+|---|---|
+| Google Cloud Run | Backend hosting (serverless containers, scales to zero) |
+| Firebase Hosting | Frontend static file hosting (CDN) |
+| Supabase | Managed PostgreSQL + pgvector extension |
+| Google Container Registry (GCR) | Docker image storage |
+| Google Cloud Build | CI build for Docker images |
+| Resend | Email delivery (verification emails) |
+| Google Places API | Competitor discovery and data |
 
 ---
 
-## 4. Repository Structure
+## 4. Project Structure
 
 ```
 ai-driven-marketing-tool/
 ├── apps/
 │   ├── backend/
-│   │   ├── alembic/
-│   │   │   └── versions/           ← Database migration files
 │   │   ├── app/
 │   │   │   ├── api/
-│   │   │   │   ├── mvp_routes.py   ← All MVP workflow endpoints (~2000 lines)
-│   │   │   │   └── routes.py       ← Auth + legacy endpoints
+│   │   │   │   ├── routes.py          # Auth, projects, campaign generation
+│   │   │   │   └── mvp/               # MVP workflow endpoints
+│   │   │   │       ├── questionnaire.py
+│   │   │   │       ├── analysis.py
+│   │   │   │       ├── positioning.py
+│   │   │   │       ├── research.py
+│   │   │   │       ├── personas.py
+│   │   │   │       ├── strategy.py
+│   │   │   │       ├── content.py
+│   │   │   │       ├── system.py
+│   │   │   │       └── deps.py        # Shared dependencies
 │   │   │   ├── core/
-│   │   │   │   ├── auth.py         ← JWT + password hashing
-│   │   │   │   ├── config.py       ← All env vars (single source of truth)
-│   │   │   │   ├── settings.py     ← Pydantic-based settings (secondary, mostly unused)
-│   │   │   │   ├── mvp_registry.py ← Agent and MCP server registry
-│   │   │   │   ├── rate_limit.py   ← Rate limiter setup
-│   │   │   │   └── security.py     ← Internal API key validation
+│   │   │   │   ├── auth.py            # JWT (custom HMAC-SHA256), password hashing
+│   │   │   │   ├── config.py          # Settings from env vars
+│   │   │   │   ├── rate_limit.py      # slowapi limiter
+│   │   │   │   ├── security.py        # Internal API key check
+│   │   │   │   ├── logging_config.py  # JSON formatter for Cloud Run
+│   │   │   │   ├── llm_tracker.py     # Token/cost/latency tracking wrapper
+│   │   │   │   ├── quality_scorer.py  # LLM output quality scoring
+│   │   │   │   ├── response_cache.py  # DB-backed response caching
+│   │   │   │   ├── metrics.py         # Custom Prometheus metrics
+│   │   │   │   ├── pipeline_tracer.py # Agent invocation tracing
+│   │   │   │   └── token_budget.py    # Prompt token budget enforcement
 │   │   │   ├── services/
-│   │   │   │   ├── onboarding_interviewer.py    ← Chat interview AI
-│   │   │   │   ├── competitive_benchmarker.py  ← Google Places + OpenAI pipeline
-│   │   │   │   ├── segment_analyst.py          ← Analysis assistant chat
-│   │   │   │   ├── positioning_copilot.py      ← Positioning statement generator
-│   │   │   │   ├── market_researcher.py        ← Research report generator
-│   │   │   │   ├── persona_builder.py          ← Buyer persona generator
-│   │   │   │   ├── channel_strategy_planner.py ← Channel strategy generator
-│   │   │   │   ├── roadmap_planner.py          ← 90-day roadmap generator
-│   │   │   │   ├── content_studio.py           ← Content asset generator
-│   │   │   │   └── memory_store.py             ← pgvector embeddings store/retrieve
-│   │   │   ├── models.py           ← All SQLAlchemy ORM models
-│   │   │   ├── db.py               ← DB engine + session setup
-│   │   │   └── main.py             ← FastAPI app entry point
-│   │   ├── tests/                  ← 11 test files
-│   │   ├── .env                    ← Local secrets (never commit)
-│   │   ├── alembic.ini
-│   │   └── requirements.txt
+│   │   │   │   ├── generator.py            # Campaign brief + channel assets
+│   │   │   │   ├── content_studio.py       # Content generation (all asset types)
+│   │   │   │   ├── competitive_benchmarker.py  # Google Places + AI enrichment
+│   │   │   │   ├── onboarding_interviewer.py   # Conversational questionnaire
+│   │   │   │   ├── persona_builder.py          # AI persona generation
+│   │   │   │   ├── market_researcher.py        # Market research reports
+│   │   │   │   ├── segment_analyst.py          # Audience segment analysis
+│   │   │   │   ├── positioning_copilot.py      # Positioning statement generation
+│   │   │   │   ├── channel_strategy_planner.py # Channel strategy
+│   │   │   │   ├── roadmap_planner.py          # Marketing roadmap
+│   │   │   │   ├── memory_store.py             # pgvector semantic memory
+│   │   │   │   ├── email_sender.py             # Resend + SMTP fallback
+│   │   │   │   └── storage.py                  # Generation persistence
+│   │   │   ├── db.py                  # SQLAlchemy engine + session
+│   │   │   ├── models.py              # All ORM models
+│   │   │   └── main.py                # App factory, middleware, CORS
+│   │   ├── alembic/
+│   │   │   ├── env.py                 # Migration runner (reads DATABASE_URL)
+│   │   │   └── versions/              # Migration scripts
+│   │   ├── Dockerfile
+│   │   ├── requirements.txt
+│   │   └── .env                       # Local dev only (never in prod)
 │   └── frontend/
-│       └── src/
-│           ├── pages/              ← One page per workflow step (9 pages)
-│           ├── components/         ← Shared UI components (12 components)
-│           ├── state/
-│           │   └── useMvpWorkflow.js ← ALL global state + API actions (single hook)
-│           ├── lib/
-│           │   ├── api.js          ← Axios instance + auth token management
-│           │   └── mvpClient.js    ← Typed API method wrappers
-│           ├── App.jsx             ← Router + progress tracking
-│           └── index.css           ← All styles (single file, ~2700 lines)
+│       ├── src/
+│       │   ├── pages/                 # Route-level components
+│       │   ├── components/            # Reusable UI components
+│       │   ├── state/
+│       │   │   └── useMvpWorkflow.js  # Central state store
+│       │   ├── lib/
+│       │   │   ├── api.js             # Axios instance + interceptors
+│       │   │   └── mvpClient.js       # API client functions
+│       │   ├── App.jsx                # Router + auth guard
+│       │   └── index.css              # Global styles + Tailwind
+│       ├── .env                       # Dev env (VITE_API_BASE_URL)
+│       ├── .env.production            # Prod env
+│       └── nginx.conf                 # Nginx config (used in Docker)
+├── firebase.json                      # Firebase Hosting config
+├── .firebaserc                        # Firebase project alias
+├── DEPLOYMENT.md                      # Step-by-step deploy guide
+└── Developer_Handoff.md               # This file
 ```
 
 ---
 
-## 5. Local Development Setup
+## 5. Backend Deep Dive
 
-### Prerequisites
-- Node.js 18+
-- Python 3.11+
-- PostgreSQL 14+ with pgvector extension installed
-- An OpenAI API key
-- (Optional) A Google Places API key
+### FastAPI App (`main.py`)
+- CORS configured via `CORS_ORIGINS` env var (comma-separated list)
+- Falls back to `FRONTEND_URL` + localhost for local dev
+- Prometheus metrics exposed at `/metrics`
+- Rate limiter attached to app state (slowapi)
+- Custom request logging middleware (method + path + status + duration ms)
+- Health check at `/health` → `{"status": "ok"}`
+- Global exception handler returns `{"detail": "Internal server error"}` for unhandled exceptions (no stack traces leaked to clients)
 
-### Backend Setup
+### Router Structure
 
-```bash
-cd apps/backend
-python -m venv venv
-source venv/bin/activate       # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-
-# Create the database
-psql -U postgres -c "CREATE DATABASE aimarketing;"
-psql -U postgres -d aimarketing -c "CREATE EXTENSION vector;"
-
-# Copy env template and fill in your values
-cp .env.example .env
-
-# Run migrations
-alembic upgrade head
-
-# Start server
-uvicorn app.main:app --reload --port 8000
-```
-
-### Frontend Setup
-
-```bash
-cd apps/frontend
-npm install
-npm run dev        # Starts at http://localhost:5173
-```
-
-### Verify It Works
-
-Open `http://localhost:5173`, register an account, create a business profile, and start the marketing discovery interview.
-
----
-
-## 6. Environment Variables
-
-All environment variables are read in `apps/backend/app/core/config.py`. This is the single source of truth — do not use `settings.py` for new variables.
-
-| Variable | Required | Default | Purpose |
+**`/api` prefix — `routes.py`:**
+| Method | Path | Auth | Description |
 |---|---|---|---|
-| `OPENAI_API_KEY` | Yes | — | OpenAI API access |
-| `OPENAI_MODEL` | No | `gpt-4o-mini` | Which OpenAI model to use |
-| `OPENAI_BASE_URL` | No | `https://us.api.openai.com/v1` | OpenAI API base URL |
-| `OPENAI_TIMEOUT_SECONDS` | No | `45` | Per-request timeout |
-| `OPENAI_MAX_RETRIES` | No | `1` | Retry count on failure |
-| `OPENAI_EMBEDDING_MODEL` | No | `text-embedding-3-small` | Model for embeddings |
-| `MEMORY_TOP_K` | No | `6` | Max memory chunks returned in semantic search |
-| `DATABASE_URL` | No | `postgresql+psycopg://postgres:postgres@localhost:5432/aimarketing` | Full DB connection string |
-| `GOOGLE_PLACES_API_KEY` | No | — | Enables real competitor data. Without this, benchmarking returns an AI-only fallback |
-| `BENCHMARKING_RADIUS_METERS` | No | `5000` | Search radius for nearby competitors (5km) |
-| `JWT_SECRET_KEY` | No (dev) | `dev-insecure-secret` | JWT signing key. MUST be set in production |
-| `INTERNAL_API_KEY` | No | — | Key for `/api/generations` internal endpoint |
-| `APP_ENV` | No | `dev` | Set to `prod` to enforce JWT_SECRET_KEY |
-| `FRONTEND_URL` | No | `http://localhost:5173` | Used in CORS origins |
-| `CORS_ORIGINS` | No | localhost:5173,5174 | Comma-separated allowed origins |
+| POST | `/api/auth/register` | None | Creates PendingRegistration, sends verification email |
+| POST | `/api/auth/login` | None | Validates credentials, returns JWT |
+| GET | `/api/auth/verify-email` | None | Promotes pending → real User |
+| POST | `/api/auth/resend-verification` | None | Resends verification email |
+| GET | `/api/auth/me` | JWT | Returns current user info |
+| POST | `/api/projects` | JWT | Creates a project |
+| GET | `/api/projects` | JWT | Lists user's projects |
+| GET | `/api/projects/{id}` | JWT | Gets single project |
+| PATCH | `/api/projects/{id}` | JWT | Updates project |
+| DELETE | `/api/projects/{id}` | JWT | Deletes project + nullifies generations |
+| POST | `/api/generate` | JWT | Campaign brief (rate limited 10/min) |
+| POST | `/api/generate-assets` | JWT | Channel assets (rate limited 10/min) |
+| GET | `/api/generations` | Internal API Key | Admin: list all generations |
+
+> Note: All `/api/projects/*` endpoints are also aliased as `/api/business-profiles/*`
+
+**`/api/mvp` prefix — `mvp/` folder:**
+- Questionnaire, analysis, positioning, research, personas, channel strategy, content generation
+
+### Rate Limiting
+- `slowapi` wraps `/generate` and `/generate-assets`
+- Limit: **10 requests/minute per IP**
+- Returns HTTP 429 with `Retry-After` header on breach
+
+### Custom JWT (`core/auth.py`)
+- **No external JWT library** (no PyJWT) — implemented using stdlib `hmac` + `hashlib` + `base64`
+- Token format: `base64url(json_payload).hmac_sha256_hex_signature`
+- Payload: `{ "sub": "<user_id>", "iat": <timestamp>, "exp": <timestamp> }`
+- Token expiry: **24 hours**
+- Secret: `JWT_SECRET_KEY` env var (required in production; falls back to insecure dev value if `APP_ENV != prod`)
+
+### Password Hashing (`core/auth.py`)
+- Algorithm: **PBKDF2-SHA256** with 310,000 iterations
+- Salt: 16-byte random hex per user (via `secrets.token_hex(16)`)
+- Stored format: `pbkdf2_sha256$310000$<salt>$<hex_digest>`
+- Comparison: `hmac.compare_digest` for constant-time, timing-attack-safe verification
+
+---
+
+## 6. Frontend Deep Dive
+
+### State Management (`state/useMvpWorkflow.js`)
+All application state lives in a single custom React hook. Key state:
+
+| State Key | Description |
+|---|---|
+| `user` | Authenticated user object |
+| `token` | JWT stored in `localStorage` |
+| `sessionId` | Current workflow session ID |
+| `projects` | List of user's business profiles |
+| `currentProject` | Selected project |
+| `pendingVerificationEmail` | Set when signup awaiting email verification |
+| `contentAssets` | Generated content items |
+| `competitors` / `benchmarkData` | Competitive analysis results |
+| `roadmap`, `personas`, `channelStrategy` | Generated marketing artifacts |
+
+**Key actions:**
+- `resetForNewSession()` — clears all session/artifact state before starting a new workflow
+- `register()` / `login()` / `logout()`
+- `resendVerification()` — resends verification email to `pendingVerificationEmail`
+
+### API Client (`lib/api.js`)
+- Axios instance with `baseURL` from `VITE_API_BASE_URL` env var
+- Request interceptor: attaches `Authorization: Bearer <token>` from localStorage
+- Response interceptor: redirects to `/login` on 401
+
+### Routing (`App.jsx`)
+- Public paths: `/login`, `/register`, `/verify-email`
+- All other paths require authentication (redirect to `/login` if no token)
+
+### Email Verification Page (`pages/VerifyEmailPage.jsx`)
+- Reads `token` query param from URL on mount
+- Calls `authClient.verifyEmail(token)`
+- Shows verifying / success / error states with appropriate UI
+
+### Auth Panel (`components/AuthPanel.jsx`)
+- Client-side email validation with regex before making API calls
+- Shows `PendingVerificationScreen` when `pendingVerificationEmail` is set
+- Handles `EMAIL_NOT_VERIFIED` (403) from login — shows inline message with resend link
+- Enter key submits forms
 
 ---
 
 ## 7. Database Schema
 
-All models are defined in `apps/backend/app/models.py`.
+### Tables
 
-### `users`
+#### `users`
 | Column | Type | Notes |
 |---|---|---|
-| id | Integer PK | |
-| email | String(255) | Unique, indexed |
-| password_hash | String(255) | PBKDF2-SHA256 |
-| full_name | String(255) | nullable |
-| created_at | DateTime(tz) | server default now() |
+| id | integer PK | |
+| email | varchar(255) | unique, indexed |
+| password_hash | varchar(255) | PBKDF2-SHA256 format |
+| full_name | varchar(255) | nullable |
+| created_at | timestamptz | server default `now()` |
 
-### `projects` (Business Profiles)
+#### `pending_registrations`
 | Column | Type | Notes |
 |---|---|---|
-| id | Integer PK | |
-| name | String(200) | Business name |
-| description | Text | nullable |
-| business_address | String(500) | Used for Google Places geocoding |
-| owner_id | Integer FK → users.id | indexed |
-| created_at | DateTime(tz) | |
+| id | integer PK | |
+| email | varchar(255) | unique, indexed |
+| password_hash | varchar(255) | hashed at signup time |
+| full_name | varchar(255) | nullable |
+| token | varchar(128) | unique, indexed — sent in verification email |
+| expires_at | timestamptz | 24h from registration |
+| created_at | timestamptz | server default |
 
-### `questionnaire_sessions`
+> Row is **deleted** when user verifies email (promotes to `users`) or when token expires and user re-registers.
+
+#### `projects`
 | Column | Type | Notes |
 |---|---|---|
-| id | Integer PK | |
-| project_id | Integer FK → projects.id | |
-| status | String(40) | `in_progress` or `completed` |
-| conversation_analysis_json | Text | nullable. JSON blob of AI analysis of the chat transcript. Saved after each reply so it persists. |
-| created_at | DateTime(tz) | |
-| updated_at | DateTime(tz) | auto-updated |
+| id | integer PK | |
+| name | varchar(200) | |
+| description | text | nullable |
+| business_address | varchar(500) | nullable — used for Google Places competitor search |
+| owner_id | integer FK | → users.id |
+| created_at | timestamptz | |
 
-### `questionnaire_responses`
-| Column | Type | Notes |
-|---|---|---|
-| id | Integer PK | |
-| session_id | Integer FK → questionnaire_sessions.id | |
-| sequence_no | Integer | Order within session |
-| question_text | Text | |
-| answer_text | Text | |
-| question_type | String(40) | `open_ended` or `mcq` |
-| question_options_json | Text | JSON array of options for MCQ |
-| source | String(40) | `system_seeded`, `chatbot_generated`, `agent_suggested`, `user_entered` |
-| created_at / updated_at | DateTime(tz) | |
+#### `generations`
+Stores all campaign brief / asset generation inputs and outputs as JSON text blobs.
 
-### `memory_chunks`
-| Column | Type | Notes |
-|---|---|---|
-| id | Integer PK | |
-| project_id | Integer FK | |
-| session_id | Integer FK | nullable |
-| response_id | Integer FK | nullable |
-| source_type | String(40) | `questionnaire_response` |
-| topic_tag | String(80) | e.g. `pricing`, `target_customer` |
-| content_text | Text | The chunk text |
-| content_hash | String(64) | SHA-256 for dedup |
-| embedding | vector(1536) | pgvector column — 1536 dims for text-embedding-3-small |
-| metadata_json | Text | JSON blob |
-| created_at | DateTime(tz) | |
+#### `questionnaire_sessions` / `questionnaire_responses`
+Tracks the conversational onboarding interview per project. Sessions have a `status` (`in_progress`, `complete`). Responses store question + answer + sequence number.
 
-### `analysis_reports`
-| Column | Type | Notes |
-|---|---|---|
-| id | Integer PK | |
-| project_id | Integer FK | |
-| source_session_id | Integer FK | nullable — which session generated this |
-| status | String(40) | `queued` or `ready` |
-| report_json | Text | Full competitive benchmarking JSON |
-| created_at / updated_at | DateTime(tz) | |
+#### `memory_chunks`
+Stores semantic memory from questionnaire responses. Uses pgvector `Vector(1536)` column for embeddings from `text-embedding-3-small`. Content hash prevents duplicates.
 
-### `positioning_statements`
-| Column | Type | Notes |
-|---|---|---|
-| id | Integer PK | |
-| project_id | Integer FK | |
-| source_session_id | Integer FK | nullable |
-| version | Integer | Auto-incremented per project |
-| statement_text | Text | The positioning statement text |
-| rationale | Text | Why this positioning was chosen |
-| payload_json | Text | Full JSON: target_segment, tagline, key_differentiators, proof_points, rationale |
-| created_at | DateTime(tz) | |
+#### Other tables
+`analysis_reports`, `positioning_statements`, `research_reports`, `persona_profiles`, `channel_strategies`, `roadmap_plans`, `media_assets` — all linked to `project_id`.
 
-### `research_reports`
-Same structure as `analysis_reports`. Stores market + competitor + customer research JSON.
+### Migrations
+Managed with **Alembic**. Migration files in `apps/backend/alembic/versions/`.
 
-### `persona_profiles`
-| Column | Type | Notes |
-|---|---|---|
-| id | Integer PK | |
-| project_id | Integer FK | |
-| source_session_id | Integer FK | nullable |
-| persona_name | String(160) | Quick-access name |
-| persona_json | Text | Full persona JSON (see persona structure below) |
-| created_at | DateTime(tz) | |
-
-**Persona JSON structure:**
-```json
-{
-  "name": "Loyal Local Laura",
-  "basic_profile": { "age", "occupation", "income", "location", "family_status", "photo_prompt" },
-  "psychographic_profile": { "goals_and_motivations", "pain_points_and_frustrations", "values_and_priorities", "lifestyle_and_interests" },
-  "behavioral_profile": { "shopping_preferences", "decision_making_process", "information_sources", "buying_triggers_and_barriers" },
-  "engagement_strategy": { "preferred_channels", "resonant_content_topics", "best_times_to_reach", "key_messages_that_convert" }
-}
+**Run migrations (PowerShell):**
+```powershell
+$env:DATABASE_URL="postgresql+psycopg://postgres.[ref]:[password]@aws-0-[region].pooler.supabase.com:5432/postgres?sslmode=require"; alembic upgrade head
 ```
 
-### `channel_strategies`, `roadmap_plans`, `media_assets`
-All follow the same pattern: `id`, `project_id`, `source_session_id`, a `_json` column, `created_at`.
+**Key note in `alembic/env.py`:** The `DATABASE_URL` is escaped before being passed to configparser:
+```python
+config.set_main_option("sqlalchemy.url", database_url.replace("%", "%%"))
+```
+This prevents a crash when the URL contains `%` from URL-encoded characters in passwords.
 
 ---
 
-## 8. Alembic Migrations
+## 8. Authentication System
 
-Migrations live in `apps/backend/alembic/versions/`. Run with `alembic upgrade head`.
+### Flow
 
-| Revision | Description |
+```
+REGISTER
+  └─► POST /api/auth/register
+        └─► Create PendingRegistration (hashed password + random token)
+        └─► Send verification email → {FRONTEND_URL}/verify-email?token=...
+        └─► Return { email, email_sent }
+
+EMAIL VERIFICATION
+  └─► GET /api/auth/verify-email?token=...
+        └─► Find PendingRegistration by token
+        └─► Check not expired
+        └─► Create real User record
+        └─► Delete PendingRegistration
+        └─► Return { message: "Email verified successfully" }
+
+LOGIN
+  └─► POST /api/auth/login
+        └─► Find User by email → verify PBKDF2 password hash
+        └─► If not in users but in pending_registrations → return 403 EMAIL_NOT_VERIFIED
+        └─► Return { access_token, token_type: "bearer" }
+```
+
+### Design Decision: Why `PendingRegistration` Table?
+Instead of an `is_verified` flag on `User`, unverified registrations live in a separate table:
+- `users` table only ever contains verified, active accounts
+- No accidental querying of unverified users in business logic
+- Expired rows can be pruned without touching real users
+- Clean upsert on retry — re-registration updates the token instead of creating a duplicate row
+
+---
+
+## 9. Email Verification Flow
+
+### Provider Priority in `services/email_sender.py`
+1. **Resend API** (if `RESEND_API_KEY` set) — production provider
+2. **SMTP** (if `SMTP_HOST` + `SMTP_USER` + `SMTP_PASSWORD` set) — fallback
+3. **Log to terminal** (if neither configured) — local dev convenience
+
+### Resend Configuration
+- API endpoint: `https://api.resend.com/emails`
+- From address: `onboarding@resend.dev` (Resend's shared test domain, no domain verification needed)
+- For production with custom domain: update `FROM_EMAIL=noreply@yourdomain.com` and verify domain in Resend dashboard
+
+### Verification Email Link
+```
+{FRONTEND_URL}/verify-email?token={64-char-urlsafe-token}
+```
+
+Local dev: `http://localhost:5173/verify-email?token=...`  
+Production: `https://ai-marketing-prod.web.app/verify-email?token=...`
+
+### Token Details
+- Generated with: `secrets.token_urlsafe(48)` → 64 characters
+- Stored in `pending_registrations.token` (unique, indexed)
+- Expires: 24 hours from registration
+- Resend endpoint refreshes the token and extends expiry
+
+---
+
+## 10. AI Integration
+
+### OpenAI Usage
+
+| Feature | Model | Output |
+|---|---|---|
+| Campaign brief generation | gpt-4o-mini | JSON (json_object mode) |
+| Channel asset generation | gpt-4o-mini | JSON |
+| Competitive benchmarking enrichment | gpt-4o-mini | JSON |
+| Content Studio (all asset types) | gpt-4o-mini | JSON |
+| Onboarding questionnaire | gpt-4o-mini | JSON |
+| Semantic memory embeddings | text-embedding-3-small | 1536-dim vector |
+
+### Token-Saving Strategy — Embedding-Based Competitor Ranking
+
+The competitive benchmarking pipeline fetches up to 20 competitors from Google Places. Naively sending all of them to `gpt-4o-mini` with full details creates a huge prompt (~8k+ tokens) that causes timeouts and high cost.
+
+**Solution: RAG-style pre-filtering with embeddings before the LLM call**
+
+```
+Before:  20 raw places → fetch Place Details for 10 → 10 competitors in LLM prompt (~8k tokens, ~100s)
+After:   20 raw places → embed + rank → top 5 → fetch Place Details for 5 → 5 in LLM prompt (~2k tokens, ~15s)
+```
+
+**How it works (`_rank_by_relevance` in `competitive_benchmarker.py`):**
+
+1. **Embed each candidate cheaply** — convert basic place data (name + types + vicinity) into a short text string, then embed all 20 using `text-embedding-3-small`. This costs ~$0.00003 per benchmarking run — essentially free.
+2. **Embed the business context** — combine the business keyword + address + first 400 chars of interview context into one query vector.
+3. **Cosine similarity ranking** — score each competitor against the business context vector. The top 5 most semantically relevant competitors win.
+4. **Only then fetch Place Details** — API calls with full reviews/hours/etc. go to just those 5 competitors (saves Google Places quota too).
+5. **Send 5 enriched competitors to LLM** — prompt is 4x smaller, response is 4x faster, no more timeouts.
+
+**Why cosine similarity works here:** A "hair salon" business context vector will score high similarity against other hair salons and low against restaurants or plumbers — even though all of them might be geographically nearby. The embedding naturally filters for business-type relevance before the expensive LLM call.
+
+**Cost comparison per benchmarking run:**
+
+| Step | Before | After |
+|---|---|---|
+| Google Places Detail API calls | 10 | 5 |
+| LLM tokens (approx) | ~8,000 | ~2,000 |
+| Embedding tokens | 0 | ~500 |
+| Total OpenAI cost | ~$0.0012 | ~$0.0004 |
+| Response time | ~100s (timeout) | ~15s |
+
+---
+
+### Why `chat.completions.create` with `json_object` Mode?
+Earlier versions used `client.responses.create` (OpenAI Responses API). This returned unstructured text that was inconsistently parsed — competitive benchmarking sections (SWOT, hours gap, opportunity gaps) silently returned empty because the text parser failed to extract structured data.
+
+**Fix:** Switched to `client.chat.completions.create` with `response_format={"type": "json_object"}`. This guarantees valid JSON output every time. The model is instructed in the prompt to return a JSON object with specific keys.
+
+```python
+resp = client.chat.completions.create(
+    model=settings.openai_model,
+    response_format={"type": "json_object"},
+    messages=[{"role": "user", "content": prompt}],
+)
+raw = resp.choices[0].message.content or ""
+result = json.loads(raw)
+```
+
+### Google Places API (Competitive Benchmarking)
+1. Geocode the business address to lat/lng
+2. Search nearby businesses by type within `BENCHMARKING_RADIUS_METERS` (default 5000m)
+3. Fetch place details: hours, rating, price level, total ratings, reviews
+4. Pass competitor data as context to OpenAI prompt
+5. AI returns: SWOT analysis, pricing comparison, hours gap analysis, opportunity gaps
+
+---
+
+## 11. Deployment
+
+### Live Infrastructure
+
+| Component | Service | Notes |
+|---|---|---|
+| Frontend | Firebase Hosting `ai-marketing-prod` | `https://ai-marketing-prod.web.app` |
+| Backend | Google Cloud Run `backend` | Region: `us-central1` |
+| Database | Supabase `swrixeaymsplobheqnaw` | Region: `us-west-2` (Oregon) |
+
+### Backend Deployment (Cloud Run)
+
+```bash
+# 1. Build Docker image
+cd apps/backend
+gcloud builds submit --tag gcr.io/YOUR_PROJECT_ID/backend
+
+# 2. Deploy / update
+gcloud run deploy backend --image gcr.io/YOUR_PROJECT_ID/backend --region us-central1
+
+# 3. Update a single env var
+gcloud run services update backend --region us-central1 --update-env-vars KEY=value
+```
+
+**Dockerfile notes:**
+- Base: `python:3.12-slim`
+- Port: **8080** (Cloud Run requirement — not the FastAPI default of 8000)
+- Workers: 1 (Cloud Run scales by instances, not workers)
+- `--timeout-keep-alive 75` matches Cloud Run's ~80s idle timeout
+- `RUN rm -f .env` — removes any local `.env` from the image; secrets come from Cloud Run env vars
+
+### Frontend Deployment (Firebase Hosting)
+
+```bash
+# 1. Set backend URL
+# Edit apps/frontend/.env.production:
+# VITE_API_BASE_URL=https://backend-[hash]-uc.a.run.app/api
+
+# 2. Build
+cd apps/frontend
+npm run build  # outputs to apps/frontend/dist/
+
+# 3. Deploy
+cd ../..
+firebase deploy --only hosting
+```
+
+**`firebase.json` key settings:**
+- `"site": "ai-marketing-prod"` — required for named sites (without this: `Assertion failed: resolving hosting target`)
+- SPA rewrite: all routes → `/index.html`
+- JS/CSS: `Cache-Control: max-age=31536000, immutable` (safe because Vite adds content hashes to filenames)
+- `index.html`: `Cache-Control: no-cache` (always fetches fresh entry point)
+
+### Database Migrations (Supabase)
+
+```powershell
+# PowerShell — run from apps/backend/
+$env:DATABASE_URL="postgresql+psycopg://postgres.[ref]:[password]@aws-0-us-west-2.pooler.supabase.com:5432/postgres?sslmode=require"; alembic upgrade head
+```
+
+**Before first migration, enable pgvector in Supabase SQL Editor:**
+```sql
+CREATE EXTENSION IF NOT EXISTS vector;
+```
+
+---
+
+## 12. Environment Variables
+
+### Backend
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `DATABASE_URL` | Yes | — | Supabase pooler connection string |
+| `JWT_SECRET_KEY` | Prod only | `dev-insecure-secret` | JWT signing secret — generate with `secrets.token_hex(32)` |
+| `INTERNAL_API_KEY` | Prod only | — | Protects `/api/generations` admin endpoint |
+| `OPENAI_API_KEY` | Yes | — | OpenAI API key |
+| `OPENAI_MODEL` | No | `gpt-4o-mini` | OpenAI model name |
+| `OPENAI_BASE_URL` | No | `https://us.api.openai.com/v1` | OpenAI endpoint |
+| `OPENAI_TIMEOUT_SECONDS` | No | `45` | Request timeout |
+| `OPENAI_EMBEDDING_MODEL` | No | `text-embedding-3-small` | Embedding model |
+| `GOOGLE_PLACES_API_KEY` | Yes | — | For competitive benchmarking |
+| `BENCHMARKING_RADIUS_METERS` | No | `5000` | Competitor search radius |
+| `RESEND_API_KEY` | Yes (prod) | — | Resend email API key |
+| `FROM_EMAIL` | No | `onboarding@resend.dev` | Sender address |
+| `APP_NAME` | No | `MarketPilot` | Used in email templates |
+| `CORS_ORIGINS` | Prod only | localhost fallback | Comma-separated allowed origins |
+| `FRONTEND_URL` | No | `http://localhost:5173` | Used in verification email links |
+| `APP_ENV` | No | `dev` | `dev` or `production` |
+| `SENTRY_DSN` | No | — | Sentry error tracking DSN (no-op if unset) |
+| `SENTRY_ENVIRONMENT` | No | `production` | Sentry environment tag |
+| `LOG_LEVEL` | No | `INFO` | Logging level (DEBUG/INFO/WARNING/ERROR) |
+
+### Frontend
+
+| Variable | Description |
 |---|---|
-| `c5ce00361ea6` | Create initial `generations` table |
-| `b7cf93d4cfc5` | Add `users` and `projects` tables; link generations to projects |
-| `54d1d5566ba4` | Empty placeholder (no-op) |
-| `54c3c445c9d4` | Full MVP schema: questionnaire sessions, responses, all artifact tables |
-| `7c1d9e2a4b11` | Add `source_session_id` FK to all artifact tables |
-| `e3a7c9b2d1f4` | Add `payload_json` to `positioning_statements` |
-| `a3f1b2c4d8e9` | Add `conversation_analysis_json` to `questionnaire_sessions` |
-| `a1f2b3c4d5e6` | Add `business_address` to `projects` |
-| `f2b9a8c1d4e7` | Add `memory_chunks` table with pgvector extension + IVFFlat index |
-| `9a6b2d4e7f01` | Normalize `question_options_json` storage format |
-
-**Important:** Always run `alembic upgrade head` after pulling new code. Never edit migration files after they are merged.
+| `VITE_API_BASE_URL` | Backend Cloud Run URL + `/api` suffix |
 
 ---
 
-## 9. The 9-Step Workflow Pipeline
+## 13. Special Cases & Gotchas
 
-The entire product follows this linear pipeline. Each step depends on the previous.
+### 1. `%` in DATABASE_URL Breaks Alembic
 
+Alembic uses Python's `configparser` internally. configparser treats `%` as the start of an interpolation sequence. A URL-encoded password like `Maryland%40123` (where `%40` = `@`) causes:
 ```
-Step 1: Business Profile (projects table)
-    ↓ owner creates a named workspace with address
-Step 2: Marketing Discovery Interview (questionnaire_sessions + questionnaire_responses)
-    ↓ AI chatbot asks adaptive questions, saves Q&A + embeddings
-Step 3: Competitive Benchmarking (analysis_reports)
-    ↓ Google Places API → nearby competitors → OpenAI enrichment
-Step 4: Positioning Statement (positioning_statements)
-    ↓ AI reads benchmarking report → generates tagline + differentiators
-Step 5: Buyer Personas (persona_profiles)
-    ↓ AI reads benchmarking + positioning + customer reviews → 3 personas
-Step 6: Research Report (research_reports)
-    ↓ AI reads analysis → deeper market + customer + competitor research
-Step 7: Channel Strategy (channel_strategies)
-    ↓ AI reads research + personas → prioritized marketing channels
-Step 8: 90-Day Roadmap (roadmap_plans)
-    ↓ AI reads strategy + personas → weekly plan with milestones
-Step 9: Content Assets (media_assets)
-    ↓ AI reads roadmap + strategy → social posts, copy, campaign assets
+ValueError: invalid interpolation syntax at position 59
 ```
 
-**Session scoping:** Every artifact (analysis, positioning, personas, etc.) is linked via `source_session_id` to the questionnaire session that produced it. If you re-run the interview and generate new artifacts, old ones are not deleted — they remain linked to their original session. The UI shows the most recent per project.
+**Fix in `alembic/env.py`:**
+```python
+config.set_main_option("sqlalchemy.url", database_url.replace("%", "%%"))
+```
+configparser sees `%%` → unescapes to `%` → SQLAlchemy gets the correct URL.
+
+**Simpler long-term fix:** Use passwords without special characters (letters and numbers only) to avoid URL encoding entirely.
 
 ---
 
-## 10. Backend Services Reference
+### 2. Cloud Run Port Must Be 8080
 
-### `competitive_benchmarker.py`
-The most complex service. Pipeline:
-1. `_infer_business_keyword()` — 3-priority system to find the right Google Places search term:
-   - Priority 1: Read stored `conversation_analysis_json` from DB → small AI call on summary
-   - Priority 2: Full transcript AI call (fallback if no stored analysis)
-   - Priority 3: Extract from primary-service answer (no AI, last resort)
-2. `_geocode_address()` — Google Geocoding API → lat/lng
-3. `_text_search_competitors()` — Google Places Text Search (primary, works without Geocoding API)
-4. `_fetch_nearby_competitors()` — Google Places Nearby Search (used if geocoding works)
-5. `_fetch_place_details()` — Fetch full details for each competitor (reviews, hours, phone, website)
-6. `_enrich_with_ai()` — Single OpenAI call that generates:
-   - Business model, services, threat level, pricing notes per competitor
-   - Hours gap analysis (when no competitor is open)
-   - SWOT analysis for the owner's business
-   - Market opportunity gaps and win strategies
+Cloud Run health probes port **8080**. FastAPI/uvicorn defaults to 8000. Container fails startup if port doesn't match.
 
-Returns JSON structure:
+```dockerfile
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
+```
+
+---
+
+### 3. Firebase Hosting `site` Field Required
+
+For projects with multiple named hosting sites, `firebase.json` must declare `"site"`:
 ```json
-{
-  "report_type": "competitive_benchmarking",
-  "analysis_source": "hybrid" | "ai_only" | "fallback",
-  "business_keyword": "hair salon",
-  "business_location": "College Park, MD",
-  "competitors": [...],
-  "market_overview": { "total_competitors_found", "market_density", "avg_rating", "avg_price_level", "opportunity_gaps", "win_strategies" },
-  "hours_gap_analysis": { "opportunity_windows", "coverage_notes", "recommendation" },
-  "swot_analysis": { "strengths", "weaknesses", "opportunities", "threats" },
-  "diagnostics": { "keyword", "geocode_status", "text_search_status", "raw_places_count" }
-}
+{ "hosting": { "site": "ai-marketing-prod", ... } }
 ```
-
-### `onboarding_interviewer.py`
-Runs the AI chat interview. Key behaviours:
-- Tracks 6 required topics: business, customer, competitors, budget, cost, goal
-- Uses semantic deduplication to avoid repeating similar questions (word-token overlap check)
-- `analyze_chat_response()` returns a structured analysis of the conversation which is persisted to `QuestionnaireSession.conversation_analysis_json` after every reply
-- Interview ends when all 6 topics are covered OR the owner sends a finish signal
-
-### `positioning_copilot.py`
-- Reads the competitive benchmarking report (NOT the old segment analysis format)
-- Extracts: business_type, location, competitor data, SWOT, opportunity gaps
-- Generates: positioning_statement, tagline, target_segment, key_differentiators, proof_points, rationale
-- Refine mode: owner writes free-text feedback → AI re-generates incorporating it
-- Saves each version with an incrementing `version` number
-
-### `persona_builder.py`
-- Reads: competitive benchmarking report + (optional) latest positioning statement
-- Extracts: business_type, location, competitor services, SWOT, customer review snippets, review summaries
-- Real Google Places review text is passed verbatim to the AI as "real customer voice" — this produces more grounded personas
-- Does NOT require Research report (personas were moved before Research in the workflow)
-- Generates 3 distinct personas with different demographics, motivations, and behaviours
-
-### `segment_analyst.py`
-- Powers the "Analysis Assistant" chat on the Competitive Benchmarking page
-- Renamed from AnalysisCopilot to CompetitiveBenchmarkingCopilot
-- Uses memory chunks + analysis report for context-aware answers
-
-### `memory_store.py`
-- After each questionnaire response is saved, its text is chunked and embedded using `text-embedding-3-small`
-- Embeddings stored in pgvector `memory_chunks` table
-- At query time, `retrieve_relevant_memory()` does cosine similarity search (top-k=6)
-- Used by the analysis assistant to answer questions with relevant context
+Without it: `Error: Assertion failed: resolving hosting target`
 
 ---
 
-## 11. API Endpoints Reference
+### 4. New Session Showing Previous Session Data
 
-Base URL: `http://localhost:8000/api`
+When navigating to the Marketing Discovery page, the old `sessionId` (persisted from the previous session) was still in state, causing stale live analysis and chat data to appear.
 
-All MVP endpoints require `Authorization: Bearer <token>` header.
+**Fix:** Call `actions.resetForNewSession()` before navigating. This explicitly clears `sessionId`, `liveAnalysis`, `chatMessages`, and all artifact state while preserving auth and project selection.
+
+---
+
+### 5. Competitive Benchmarking Missing SWOT/Hours/Opportunity Sections
+
+The AI enrichment was using `client.responses.create` (OpenAI Responses API) which returned unstructured plain text. The text parser silently dropped sections it couldn't match.
+
+**Fix:** Switched to `client.chat.completions.create` with `response_format={"type": "json_object"}`. This forces the model to return structured JSON with all required keys. Logging was added for the raw response and returned keys to aid debugging.
+
+---
+
+### 6. Supabase Direct Connection DNS Failure
+
+`db.PROJECT_REF.supabase.co:5432` (direct connection host) may fail DNS resolution when accessed from outside Supabase's infrastructure.
+
+**Fix:** Use the **connection pooler** URL instead:
+```
+aws-0-REGION.pooler.supabase.com:5432
+```
+Username for pooler format: `postgres.PROJECT_REF` (not just `postgres`).
+
+---
+
+### 7. Resend 403 on Unverified Sender Domain
+
+Using a custom `FROM_EMAIL` domain that isn't verified in Resend returns `403 Forbidden`.
+
+**Fix:** Use `onboarding@resend.dev` (Resend's shared test domain — no verification needed) until your own domain is verified in the Resend dashboard.
+
+---
+
+### 8. PowerShell Doesn't Support `\` Line Continuation
+
+`\` for multi-line commands is bash syntax. In PowerShell, all gcloud commands must be written on one line:
+
+```powershell
+# Wrong (bash)
+gcloud run deploy backend \
+  --image gcr.io/project/backend \
+  --region us-central1
+
+# Correct (PowerShell)
+gcloud run deploy backend --image gcr.io/project/backend --region us-central1
+```
+
+---
+
+### 9. Custom JWT Is Not Standard JWT
+
+The project implements JWT manually using Python stdlib (`hmac`, `hashlib`, `base64`). The token format is `base64url(json_payload).hmac_sha256_hex_signature` — it has no header segment. This means:
+- Standard JWT libraries (PyJWT, jsonwebtoken) **cannot verify these tokens**
+- The tokens work correctly within this self-contained system
+- If you add a third-party service that needs to verify tokens, you'll need to switch to standard JWT
+
+---
+
+### 10. `psycopg` v3 vs `psycopg2`
+
+The project uses **psycopg v3** (package name: `psycopg`), not the older `psycopg2`. SQLAlchemy connection strings use:
+```
+postgresql+psycopg://...   ← psycopg v3
+postgresql+psycopg2://...  ← psycopg v2 (NOT used here)
+```
+These are different packages. Installing `psycopg2` instead of `psycopg` will cause connection errors.
+
+---
+
+### 11. Competitive Benchmarking OpenAI Timeout
+
+The benchmarking AI call timed out (101 seconds) because Google Places returns up to 20 competitors and sending all of them with full reviews to `gpt-4o-mini` created an 8k+ token prompt.
+
+**Fix — two-part:**
+1. Added embedding-based pre-filtering (`_rank_by_relevance`) to select only the 5 most relevant competitors before the LLM call (see Section 10 for full strategy)
+2. Set a dedicated 120s timeout on the enrichment call instead of the global 45s default — because this is inherently a larger prompt than other calls
+
+The root cause pattern: **never let unbounded external data (Google Places results) flow directly into an LLM prompt**. Always filter/rank first.
+
+---
+
+### 12. Supabase Pooler Username Format
+
+When using Supabase's connection pooler, the username must include the project reference:
+```
+postgresql+psycopg://postgres.swrixeaymsplobheqnaw:PASSWORD@aws-0-us-west-2.pooler.supabase.com:5432/postgres
+```
+Using just `postgres` as the username with the pooler URL → `password authentication failed for user "postgres"`.
+
+---
+
+### 13. pgvector Type Registration Required for psycopg v3
+
+Without calling `register_vector(connection)` on every new psycopg v3 connection, Python `list[float]` values cannot be serialized to PostgreSQL `vector` type. The insert silently succeeds but stores NULL. Fixed by adding a SQLAlchemy `connect` event listener in `db.py`:
+
+```python
+@event.listens_for(engine, "connect")
+def _register_vector(dbapi_conn, _):
+    register_vector(dbapi_conn)
+```
+
+This is a psycopg v3-specific requirement — psycopg2 handled type registration differently.
+
+---
+
+### 14. OpenAI Regional API Keys
+
+API keys provisioned on the US region only work with `us.api.openai.com/v1`, not `api.openai.com/v1`. Using the global endpoint returns HTTP 401 with `incorrect_hostname` error. Set `OPENAI_BASE_URL=https://us.api.openai.com/v1` in Cloud Run environment variables.
+
+---
+
+## 14. Observability, Evaluation & Optimization
+
+### Overview
+
+The platform has a full observability stack built on top of the core application:
+
+| Layer | Tool | What it captures |
+|---|---|---|
+| Structured Logging | Python `logging` + JSON formatter | Every request, LLM call, cache op, quality score |
+| Error Tracking | Sentry (sentry-sdk[fastapi]) | All unhandled exceptions + ERROR logs |
+| LLM Tracking | `core/llm_tracker.py` | Tokens, cost, latency per agent per call |
+| Quality Scoring | `core/quality_scorer.py` | Schema completeness score (0–1) per output |
+| Prometheus Metrics | `core/metrics.py` | 7 custom AI metrics at `/metrics` |
+| Pipeline Tracing | `core/pipeline_tracer.py` | Per-agent DB trace with duration + status |
+| Response Caching | `core/response_cache.py` | DB-backed LLM result cache |
+| Token Budgets | `core/token_budget.py` | Per-agent prompt size limits |
+| Retrieval Eval | `memory_store.py` | Cosine similarity scores on retrieved chunks |
+
+---
+
+### Structured JSON Logging (`core/logging_config.py`)
+
+All logs are emitted as single-line JSON to stdout, which Cloud Run ingests into Google Cloud Logging automatically. Every log line includes `severity`, `message`, `logger`, and `time` fields. Extra fields passed via `extra={}` are indexed as `jsonPayload` fields — searchable in Cloud Log Explorer.
+
+```python
+logger.info("llm_call", extra={
+    "agent": "competitive_benchmarker",
+    "model": "gpt-4o-mini",
+    "total_tokens": 1152,
+    "estimated_cost_usd": 0.000312,
+    "latency_ms": 3420,
+})
+```
+
+HTTP request logs include `http_method`, `http_path`, `http_status`, `duration_ms`. 5xx responses log at WARNING level for easy filtering.
+
+**Cloud Logging queries:**
+```
+jsonPayload.message="llm_call" AND jsonPayload.agent="competitive_benchmarker"
+jsonPayload.message="llm_quality" AND severity="WARNING"
+jsonPayload.http_status>=500
+```
+
+---
+
+### LLM Call Tracking (`core/llm_tracker.py`)
+
+Four wrapper functions replace direct OpenAI SDK calls across all 10 agents:
+
+- `tracked_responses(client, agent, **kwargs)` — wraps `client.responses.create()`
+- `tracked_chat(client, agent, **kwargs)` — wraps `client.chat.completions.create()`
+- `tracked_embeddings(client, agent, **kwargs)` — wraps `client.embeddings.create()`
+- `tracked_image(client, agent, **kwargs)` — wraps `client.images.generate()`
+
+Each wrapper times the call, reads `usage` from the response, computes estimated cost using a built-in price table, and emits a `llm_call` structured log + Prometheus metrics.
+
+**Cost table (USD per token, as of 2025):**
+- gpt-4o-mini: $0.15/1M input, $0.60/1M output
+- text-embedding-3-small: $0.02/1M tokens
+- dall-e-3: $0.04/image
+
+---
+
+### LLM Output Quality Scoring (`core/quality_scorer.py`)
+
+Every LLM output is scored 0.0–1.0 before being returned to the caller. Scores below 0.7 log at WARNING level. The scorer runs 5 check types:
+
+1. **Required keys** — are all expected top-level fields present and non-null?
+2. **Non-empty lists** — are array fields populated?
+3. **Nested key paths** — do deep fields like `unit_economics.estimated_cac` exist?
+4. **Numeric range** — are score fields in the expected range (e.g., 1–10)?
+5. **Minimum length** — is the output at least N characters (truncation detection)?
+
+Per-agent convenience wrappers (`score_segment_analysis`, `score_competitive_benchmarking`, `score_positioning`, etc.) encode each agent's expected schema.
+
+---
+
+### Custom Prometheus Metrics (`core/metrics.py`)
+
+7 AI-specific metrics exposed at `GET /metrics`:
+
+| Metric | Type | Labels |
+|---|---|---|
+| `llm_calls_total` | Counter | agent, model, call_type, status |
+| `llm_latency_seconds` | Histogram | agent, call_type |
+| `llm_tokens_total` | Counter | agent, token_type (prompt/completion) |
+| `llm_cost_usd_total` | Counter | agent |
+| `llm_quality_score` | Histogram | agent |
+| `pipeline_step_duration_seconds` | Histogram | step, status |
+| `cache_operations_total` | Counter | operation (hit/miss/set/expired), agent |
+
+---
+
+### Pipeline Tracing (`core/pipeline_tracer.py`)
+
+Every agent invocation in the 6 main pipeline endpoints is wrapped in `trace_step()`:
+
+```python
+with trace_step(db, step="competitive_benchmarker", project_id=project.id):
+    result = run_competitive_benchmarking(...)
+```
+
+This records a row in `pipeline_runs` table with: `step`, `project_id`, `status`, `started_at`, `completed_at`, `duration_ms`, `error_msg`. Cached results are logged with `status="cached"` instead of running the agent.
+
+**Query to find slowest steps:**
+```sql
+SELECT step, AVG(duration_ms), COUNT(*) FROM pipeline_runs
+WHERE status = 'success' GROUP BY step ORDER BY AVG(duration_ms) DESC;
+```
+
+---
+
+### DB-Backed Response Caching (`core/response_cache.py`)
+
+LLM results are cached in the `llm_cache` table keyed by SHA-256 of `agent + inputs`. On cache hit, the entire LLM + Google Places pipeline is skipped.
+
+| Endpoint | Agent cached | TTL |
+|---|---|---|
+| POST /analysis/run | competitive_benchmarker | 24h |
+| POST /positioning/generate | positioning_copilot | 6h |
+| POST /personas/generate | persona_builder | 6h |
+| POST /strategy/generate | channel_strategy_planner | 12h |
+| POST /roadmap/generate | roadmap_planner | 12h |
+
+Cache key is computed from inputs that affect the output (e.g., `analysis_report_id`, `persona_ids`) — not from the full payload — so trivial field changes don't invalidate the cache.
+
+---
+
+### Token Budget Enforcement (`core/token_budget.py`)
+
+Per-agent token budgets prevent unbounded prompt growth as projects accumulate data:
+
+| Agent | Budget (tokens) |
+|---|---|
+| segment_analyst | 3000 |
+| segment_analyst_chat | 2000 |
+| competitive_benchmarker | 3500 |
+| memory_context | 600 |
+| chat_history | 400 |
+
+`trim_str(text, max_tokens, label)` and `trim_list(items, max_tokens, label)` truncate inputs and log `token_budget_exceeded` warnings when truncation occurs.
+
+---
+
+### Embedding Retrieval Evaluation (`services/memory_store.py`)
+
+After semantic search, `retrieve_relevant_memory()` computes cosine similarity scores for every returned chunk and logs:
+- `avg_similarity` — average similarity across returned chunks
+- `min_similarity` — lowest similarity (potential noise)
+- `low_relevance=True` when min_similarity < 0.75
+
+This lets you detect when the RAG system is returning weakly-relevant context and tune the similarity threshold accordingly.
+
+---
+
+## 15. Interview Q&A
+
+### System Design
+
+**Q: Walk me through the architecture of this project.**
+
+React SPA hosted on Firebase Hosting talks to a FastAPI backend on Cloud Run via HTTPS REST/JSON. The backend uses Supabase (managed PostgreSQL + pgvector) for persistence, OpenAI for all AI generation, and Google Places API for competitor data. Firebase Hosting serves static files over a CDN globally. Cloud Run handles API requests serverlessly — scales to zero when idle, scales out via new container instances under load. No custom infra to manage.
+
+---
+
+**Q: Why Cloud Run instead of a traditional server or EC2?**
+
+Cloud Run fits a marketing tool perfectly — usage is bursty (users generate content in sessions, then go idle for hours). With scale-to-zero we pay essentially nothing during idle periods. It's fully managed — no server patching, OS updates, or load balancer config. The main trade-off is cold starts (~5 seconds after idle), which we accept for the cost savings at this scale. For high-traffic production we'd set `--min-instances 1` to keep it warm at ~$5/mo.
+
+---
+
+**Q: Why Supabase instead of self-managed PostgreSQL?**
+
+Supabase provides managed PostgreSQL with the pgvector extension pre-available — both critical for this project. It handles backups, SSL, connection pooling, and the dashboard makes data inspection easy. For a startup-phase project it's the right trade-off between control and operational overhead. The connection pooler handles connection limits gracefully, which matters for a serverless backend that creates many short-lived connections.
+
+---
+
+**Q: How does the content generation pipeline work end-to-end?**
+
+User selects a content type (e.g., "Email Newsletter"), sets tone and adds context → frontend calls `POST /api/mvp/content/generate` → backend loads the project's business profile context → constructs a prompt with asset type, tone, audience, and any semantic memory from the user's questionnaire responses → calls `gpt-4o-mini` with `json_object` response format → returns structured JSON with headline, body, CTA, etc. → frontend renders in a card UI.
+
+---
 
 ### Authentication
-| Method | Path | Description |
-|---|---|---|
-| POST | `/auth/register` | Register new user. Body: `{email, password, full_name}` |
-| POST | `/auth/login` | Login. Body: `{email, password}`. Returns `{access_token}` |
-| GET | `/auth/me` | Get current user info |
 
-### Business Profiles
-| Method | Path | Description |
-|---|---|---|
-| GET | `/business-profiles` | List all profiles for current user |
-| POST | `/business-profiles` | Create profile. Body: `{name, description, business_address}` |
+**Q: How does your authentication work?**
 
-### Discovery Interview
-| Method | Path | Description |
-|---|---|---|
-| POST | `/mvp/questionnaire/chat/start` | Start interview. Body: `{business_profile_id}`. Returns session_id + first question |
-| GET | `/mvp/questionnaire/chat/{session_id}` | Get all messages so far |
-| POST | `/mvp/questionnaire/chat/{session_id}/reply` | Send answer. Body: `{answer_text}`. Returns next question |
-| POST | `/mvp/questionnaire/chat/{session_id}/finish` | End interview. Body: `{force: bool}` |
-
-### Workflow Pipeline
-| Method | Path | Description |
-|---|---|---|
-| POST | `/mvp/analysis/run` | Run competitive benchmarking. Body: `{business_profile_id}` |
-| POST | `/mvp/analysis/assistant/query` | Chat with analysis assistant. Body: `{business_profile_id, message, history}` |
-| POST | `/mvp/positioning/generate` | Generate positioning. Body: `{business_profile_id}` |
-| POST | `/mvp/positioning/refine` | Refine with feedback. Body: `{business_profile_id, owner_feedback}` |
-| GET | `/mvp/positioning/{project_id}` | List all positioning versions |
-| POST | `/mvp/personas/generate` | Generate personas. Body: `{business_profile_id}` |
-| POST | `/mvp/research/run` | Generate research. Body: `{business_profile_id}` |
-| POST | `/mvp/strategy/generate` | Generate channel strategy. Body: `{business_profile_id}` |
-| POST | `/mvp/roadmap/generate` | Generate roadmap. Body: `{business_profile_id}` |
-| POST | `/mvp/content/generate` | Generate content asset. Body: `{business_profile_id, asset_type, prompt_text, num_variants}` |
-
-### Session & Workflow Summary
-| Method | Path | Description |
-|---|---|---|
-| GET | `/mvp/questionnaire/sessions/by-business-profile/{id}` | List sessions for a profile |
-| GET | `/mvp/workflow/session-summary/{session_id}` | Full snapshot: all artifacts + progress for a session |
+Email + password auth with a custom JWT. On registration, credentials are stored in `pending_registrations` and a verification email is sent. Once the user clicks the link, a real `User` record is created. On login, we validate credentials against a PBKDF2-SHA256 hash (310,000 iterations) and issue a token signed with HMAC-SHA256. The token carries a user ID and 24-hour expiry. The frontend stores it in localStorage and sends it as `Authorization: Bearer <token>` on every request.
 
 ---
 
-## 12. Frontend Architecture
+**Q: Why implement JWT manually instead of using PyJWT?**
 
-### State Management
-Everything lives in one React hook: `apps/frontend/src/state/useMvpWorkflow.js`
+To reduce dependencies in the security-critical auth layer and to understand the mechanism fully. Using stdlib `hmac`, `hashlib`, and `base64` — there's nothing opaque happening. The trade-off: these tokens aren't interoperable with standard JWT tooling. If a third-party service ever needs to verify tokens (e.g., an edge function), we'd switch to standard JWT.
 
-This was a deliberate architectural choice — the entire application state (auth, projects, sessions, all workflow artifacts) is managed in a single hook exported from this file. No Redux, no Zustand, no Context API.
+---
 
-The hook exposes:
-- `state` — all state values
-- `set` — direct state setters (e.g. `set.setProjectName`)
-- `actions` — async actions that call the API (e.g. `actions.generatePersonas()`)
+**Q: Explain the email verification flow and why you designed it this way.**
 
-The `run()` helper wraps every async action with loading state, error toasting, and success state management:
-```javascript
-const run = async (fn, loadingMsg = "Working...") => {
-  setBusy(true);
-  setMsg(loadingMsg);
-  try { return { ok: true, result: await fn() }; }
-  catch (e) { setMsg(e?.response?.data?.detail || e?.message || "Request failed"); return { ok: false }; }
-  finally { setBusy(false); }
-};
+When a user registers, we don't create a `User` record. Instead we create a `PendingRegistration` row with hashed credentials and a secure random token, then email a link. When they click it, the token is validated, expiry checked, a real `User` is created, and the pending row is deleted.
+
+This is cleaner than an `is_verified` flag because: the `users` table only ever contains verified accounts, there's no risk of business logic accidentally including unverified users in queries, and expired signups can be cleaned up without touching real user records. The table separation makes the invariant explicit.
+
+---
+
+**Q: How do you prevent brute force on login?**
+
+Rate limiting via `slowapi` on the generate endpoints. Login itself isn't rate limited in the current implementation — that's a known gap. The password hashing uses 310,000 PBKDF2 iterations which makes offline brute force slow. For production hardening we'd add per-IP rate limiting on auth endpoints.
+
+---
+
+### Database
+
+**Q: Why store AI output as `Text` JSON rather than PostgreSQL `jsonb`?**
+
+The AI output structure varies per generation type and evolves as we update prompts. Using `Text` keeps migrations simple — when the JSON schema changes, no ALTER TABLE needed. We don't do SQL queries inside the JSON (no `->` operators), so `jsonb` indexing provides no benefit. The data is read and written as blobs. If we needed to filter generations by output fields, we'd migrate those columns to `jsonb`.
+
+---
+
+**Q: What is pgvector and why do you need it?**
+
+pgvector is a PostgreSQL extension that adds a native `vector` column type and approximate nearest-neighbor search (via IVFFlat/HNSW indexes). We use it to store 1536-dimension embeddings of questionnaire responses in `memory_chunks`. When generating content, we semantically search for the most relevant context from the user's prior answers, giving the AI grounding in their specific business. This avoids stuffing the entire conversation history into every prompt.
+
+---
+
+**Q: How do you handle schema migrations in production?**
+
+Alembic manages migrations. Migration files are version-controlled in `alembic/versions/`. We run `alembic upgrade head` manually before each deployment. The `env.py` reads `DATABASE_URL` from the environment, overriding the static value in `alembic.ini`, so we never hardcode connection strings. One gotcha: `%` characters in the URL must be escaped to `%%` before passing to `config.set_main_option` due to configparser's interpolation syntax.
+
+---
+
+### API Design
+
+**Q: Why are `/api/projects` and `/api/business-profiles` the same endpoints?**
+
+The underlying model is called `Project` but the domain concept is "business profile." Both route aliases exist to support a naming refactor without breaking existing frontend code. They share identical handler functions via FastAPI's route decorator — `@router.get("/projects")` and `@router.get("/business-profiles")` both point to `get_projects`.
+
+---
+
+**Q: How does rate limiting work?**
+
+`slowapi` (a Starlette wrapper around Flask-Limiter) decorates individual endpoints with `@limiter.limit("10/minute")`. The limiter uses client IP as the key. On breach it returns HTTP 429 with `X-RateLimit-*` and `Retry-After` headers. The limiter is attached to `app.state` in `main.py`. This protects OpenAI API costs — each generate call costs money.
+
+---
+
+**Q: How do you protect admin-only endpoints?**
+
+The `/api/generations` endpoint uses a `require_internal_api_key` FastAPI dependency. The caller must include a header with the value of `INTERNAL_API_KEY`. This is separate from user JWT auth — it's for server-to-server or admin tooling use. The key is set as a Cloud Run environment variable and never exposed to frontend clients.
+
+---
+
+### Frontend
+
+**Q: How do you manage state across a multi-step marketing workflow?**
+
+All state lives in `useMvpWorkflow.js`, a single custom React hook. It exposes `state`, `set`, and `actions`. Each page component receives the `workflow` object as a prop and reads/writes to this central store. The workflow progresses linearly (questionnaire → analysis → personas → content). When starting a new session, `resetForNewSession()` clears all session-specific state (sessionId, artifacts, chat history) while preserving auth and project selection.
+
+---
+
+**Q: Why store the JWT in localStorage instead of an HTTP-only cookie?**
+
+Simpler setup for a SPA calling a cross-origin API (Firebase domain → Cloud Run domain). HTTP-only cookies with cross-origin require `SameSite=None; Secure` plus specific CORS `allow_credentials` configuration. The trade-off: localStorage is accessible to JavaScript, making it vulnerable to XSS attacks. For a higher-security implementation, HTTP-only cookies are preferable. Current implementation prioritizes simplicity at the cost of XSS token theft risk.
+
+---
+
+### Infrastructure
+
+**Q: Why does Cloud Run use 1 uvicorn worker?**
+
+Cloud Run scales horizontally — it creates new container instances under load, not new processes within a container. FastAPI with uvicorn is async (handles concurrent requests on a single event loop via Python asyncio). Adding multiple workers would compete for memory within the same instance without increasing throughput meaningfully in this model. The Dockerfile comment explains this explicitly.
+
+---
+
+**Q: How do you handle CORS for a cross-origin deployment?**
+
+`CORS_ORIGINS` env var on Cloud Run holds a comma-separated list of allowed origins (e.g., `https://ai-marketing-prod.web.app`). This is parsed in `config.py` and passed to FastAPI's `CORSMiddleware`. For local dev, it falls back to localhost:5173 and localhost:5174. The critical production requirement: the Firebase Hosting URL must exactly match — no trailing slash.
+
+---
+
+**Q: Explain the Firebase Hosting caching strategy.**
+
+Vite generates JS/CSS bundle filenames with content hashes (e.g., `main.a3f2b1.js`). Since filenames change on every build, these can be cached forever: `Cache-Control: max-age=31536000, immutable`. The `index.html` entry point gets `Cache-Control: no-cache` so the browser always fetches the latest version, which then loads the correctly-hashed (and correctly-cached) assets. This gives best-of-both-worlds: aggressive caching for assets + always-fresh entry point.
+
+---
+
+### Tricky Bugs
+
+**Q: How did you optimize LLM token usage and reduce costs?**
+
+The competitive benchmarking pipeline fetches up to 20 competitors from Google Places. The naive approach — sending all 20 with full reviews and hours to the LLM — created an 8k+ token prompt that took over 100 seconds and timed out.
+
+The fix was a RAG-style pre-filtering step using vector embeddings **before** the LLM call:
+
+1. Convert each competitor's basic data (name, types, vicinity) into a short text string
+2. Embed all 20 candidates using `text-embedding-3-small` alongside the user's business context
+3. Rank by cosine similarity — the 5 competitors most semantically similar to the user's business type bubble up
+4. Only then fetch full Place Details (reviews, hours) for those 5
+5. Send just 5 enriched competitors to the LLM
+
+This reduced the LLM prompt from ~8k to ~2k tokens, response time from 100s to ~15s, and Google Places API calls from 10 to 5. The embedding step itself costs ~$0.00003 — negligible compared to the savings on the LLM call.
+
+The key insight: **embeddings are cheap ($0.02/1M tokens) and fast (~200ms). Use them to filter before the expensive LLM call, not after.** This is the same principle as RAG in document Q&A — retrieve relevant chunks first, then generate.
+
+---
+
+**Q: Describe the hardest bug you fixed in this project.**
+
+The competitive benchmarking page was showing the price-quality chart but silently omitting SWOT analysis, hours gap, and opportunity gap sections. No errors, no logs — just empty sections. Root cause: the AI service was using `client.responses.create` (OpenAI Responses API) which returns plain text. The text parser used regex to extract JSON-like sections, but the model's formatting was inconsistent and the regex silently failed to match.
+
+Fix: switched to `client.chat.completions.create` with `response_format={"type": "json_object"}`. This forces the model to return valid JSON with all required keys. Added logging for the raw response and the keys returned so future issues would be immediately visible. After the fix all sections appeared reliably.
+
+---
+
+**Q: What was the `%` configparser bug and how did you fix it?**
+
+When running Alembic migrations against Supabase with a password containing `@` (which URL-encodes to `%40`), Python raised:
 ```
-
-### Routing
-React Router DOM v7. All routes defined in `App.jsx`. The `progress` object tracks which steps are done (drives nav badges):
+ValueError: invalid interpolation syntax at position 59
 ```
-/projects → /questionnaire → /analysis → /positioning → /personas → /research → /strategy → /roadmap → /content
+Alembic passes the `DATABASE_URL` to `config.set_main_option()`, which internally uses Python's `configparser`. configparser treats `%` as the start of a `%(variable)s` interpolation sequence. The `%40` in the URL was interpreted as a malformed interpolation.
+
+Fix: escape `%` to `%%` before passing to configparser:
+```python
+config.set_main_option("sqlalchemy.url", database_url.replace("%", "%%"))
 ```
-
-### Toast Notifications
-`ToastStack` component with per-toast auto-dismiss using `useEffect`. Each toast has its own 2-second timer tied to its own lifecycle — this avoids a bug where a shared `setTimeout` cleanup would cancel the dismiss if any other state changed.
-
-### 401 Handling
-An Axios response interceptor in `api.js` catches 401 responses globally, clears the token from localStorage, and redirects to `/`. This handles expired JWT tokens (24-hour expiry) automatically.
-
-### No Charting Library
-The Price vs Rating scatter chart on the Competitive Benchmarking page is built with raw SVG inside React. Decision: keep the bundle lean (no Recharts/Chart.js dependency for a single chart). Uses a deterministic jitter function based on competitor name hash to prevent dot overlap.
-
-### CSS
-A single `index.css` file (~2700 lines). All styles are written in plain CSS — no Tailwind, no CSS Modules, no styled-components. CSS variables are used for the brand colour (`--brand: #c72832`), muted text, and border lines.
+configparser reads `%%` and unescapes it to `%`, giving SQLAlchemy the correct URL. The simpler production fix: use passwords with no special characters to avoid URL encoding entirely.
 
 ---
 
-## 13. Authentication System
+### Observability & Cost
 
-Custom JWT implementation in `apps/backend/app/core/auth.py` — no PyJWT or python-jose library.
+**Q: How do you monitor LLM costs and prevent budget overruns?**
 
-**Password hashing:** PBKDF2-SHA256 with 310,000 rounds + random 16-byte salt. Each password hash is stored as `{salt}:{hash}`.
-
-**JWT structure:**
-- Payload: `{sub: user_id, iat: timestamp, exp: timestamp}`
-- Encoded as: `base64url(payload).HMAC-SHA256-signature`
-- Expiry: 24 hours by default
-
-**Secret key:**
-- In development: falls back to `"dev-insecure-secret"` if `JWT_SECRET_KEY` is not set
-- In production (`APP_ENV=prod`): raises `RuntimeError` if `JWT_SECRET_KEY` is missing
-- All tokens signed and verified with the same secret — if you change the secret, all existing tokens become invalid
-
-**Why custom JWT?** The original developer chose to avoid adding a JWT library dependency and implement the minimal signing logic directly.
+Every OpenAI API call goes through a tracking wrapper (`llm_tracker.py`) that reads the `usage` field from the response and computes estimated cost using a built-in price table. Costs are logged as structured JSON (`llm_call` message) and emitted as a Prometheus counter (`llm_cost_usd_total` labeled by agent). This lets us see exactly which agent burns the most money. To prevent overruns: token budgets cap prompt sizes per agent, response caching avoids repeat calls, and embedding-based pre-filtering reduces LLM calls per pipeline run.
 
 ---
 
-## 14. Competitive Benchmarking Pipeline
+**Q: How do you evaluate LLM output quality in production?**
 
-This is the most externally-dependent feature. It uses two Google APIs:
-
-### Google APIs Required
-1. **Places API** — for Text Search and Place Details
-2. **Geocoding API** — optional, for radius-based Nearby Search
-
-### API Key Setup
-1. Go to Google Cloud Console → APIs & Services → Library
-2. Enable: **Places API** and **Geocoding API**
-3. Create an API key → paste into `apps/backend/.env` as `GOOGLE_PLACES_API_KEY`
-4. Enable billing on your Google Cloud project (Places API requires billing)
-
-### Search Strategy (Two-Tier Fallback)
-The system tries two approaches in order:
-
-1. **Geocode → Nearby Search** (preferred, radius-controlled):
-   - Converts business address to lat/lng using Geocoding API
-   - Searches for competitors within `BENCHMARKING_RADIUS_METERS` (default 5km)
-   - More accurate — only shows truly local competitors
-
-2. **Text Search** (fallback, used when Geocoding is denied or unavailable):
-   - Sends query like "hair salon near College Park, MD" directly to Places Text Search
-   - Does not require Geocoding API
-   - Slightly less location-precise but works without Geocoding enabled
-
-### Diagnostics
-Every response includes a `diagnostics` field showing exactly what happened:
-```json
-"diagnostics": {
-  "keyword": "hair salon",
-  "geocode_status": "geocoding_status:REQUEST_DENIED",
-  "text_search_status": "OK",
-  "raw_places_count": 10
-}
-```
-If you see `competitors: []`, check `diagnostics` first before debugging the code.
-
-### Keyword Inference
-The system figures out what kind of business to search for using a 3-priority chain:
-1. Read stored `conversation_analysis_json` from the session → small AI call on summary
-2. Full transcript AI call (if no stored analysis)
-3. Extract from primary-service answer directly (no AI)
-
-This was implemented after a bug where a flower business was incorrectly matched to "spa" because the original approach used a hardcoded keyword map with substring matching ("beautiful" matching "beauty").
+After every LLM call, the output goes through a quality scorer that checks: required fields present, lists non-empty, nested paths exist, numeric scores in range, minimum output length met. Each check is binary — passed or failed. The ratio gives a 0–1 quality score. Scores below 0.7 emit a WARNING log with which checks failed. This creates a quality trend over time — if a prompt change silently degrades outputs, we catch it in the next deployment via quality score drop.
 
 ---
 
-## 15. Memory System (pgvector)
+**Q: How do you handle observability for an AI system specifically?**
 
-After each questionnaire response is saved, `memory_store.py` runs automatically:
-
-1. Chunks the response text (if very long)
-2. Generates an embedding using `text-embedding-3-small` (1536 dimensions)
-3. Checks content hash to avoid storing duplicates
-4. Stores in the `memory_chunks` table with `source_type`, `topic_tag`, and `embedding`
-
-At query time (e.g. Analysis Assistant chat), `retrieve_relevant_memory()` does:
-1. Embeds the query text
-2. Runs cosine similarity search via pgvector: `embedding <=> query_vector`
-3. Returns top-k chunks (default k=6)
-
-This gives the AI assistants awareness of what the owner said in their interview, even for follow-up questions asked much later in the workflow.
-
-**pgvector index:** An IVFFlat index is created on the `embedding` column for performance at scale.
+Standard HTTP metrics (latency, error rate) aren't enough for LLM systems — you need AI-specific signals. We added: (1) per-agent token tracking so you know which prompt is most expensive, (2) LLM latency histograms by agent and call type (chat vs embedding vs image), (3) quality scores to catch prompt regressions, (4) retrieval evaluation (cosine similarity scores on RAG results), and (5) pipeline tracing per project so you can see where users drop off. All emitted as structured JSON logs (indexed by Cloud Logging) and Prometheus metrics (queryable via `/metrics`).
 
 ---
 
-## 16. Key Decisions and Why
+**Q: How does your caching strategy work for LLM responses?**
 
-### Decision 1: Single monolithic route file (`mvp_routes.py`)
-**What:** All ~70 MVP endpoints live in one ~2000-line file.
-**Why:** Speed of development. The project was built iteratively in a single conversation context. Splitting into multiple route files would have added indirection with no immediate benefit. A future developer should consider splitting by domain (questionnaire, analysis, positioning, etc.) once the API stabilises.
-
-### Decision 2: Single state hook (`useMvpWorkflow.js`)
-**What:** All frontend state — auth, projects, sessions, every workflow artifact — lives in one React hook.
-**Why:** The application has no need for per-component state isolation. Every page needs access to the global workflow state. Using Context API or Redux would add boilerplate with no benefit at this scale. The hook is large (~600 lines) but predictable — every action follows the same `run()` pattern.
-
-### Decision 3: Google Places API over Yelp
-**What:** Competitive benchmarking uses Google Places, not Yelp.
-**Why:** Google Places has better coverage for small local businesses, official API support, and the owner already had a Google Cloud account. Yelp's API is more restrictive and has lower rate limits. Google Places data quality (ratings, reviews, hours, photos) is more reliable.
-
-### Decision 4: Text Search as primary, Geocode + Nearby Search as enhancement
-**What:** The system tries Text Search first (or as fallback), not Geocoding.
-**Why:** The Geocoding API requires a separate API enable in Google Cloud Console. Many users would enable Places API but not Geocoding, causing silent failures. After the owner hit `REQUEST_DENIED` on geocoding, the system was redesigned to use Text Search as the primary path since it only needs Places API.
-
-### Decision 5: Conversation analysis persisted to DB after every chat reply
-**What:** `QuestionnaireSession.conversation_analysis_json` is updated on every chat reply.
-**Why:** Originally, `analyze_chat_response()` ran during the interview but only returned to the frontend — it was never stored. This meant downstream services (like competitive benchmarking keyword inference) had no access to the interview analysis. Adding persistence ensures this rich context is available to all downstream agents.
-
-### Decision 6: Personas moved before Research in the workflow
-**What:** Step order changed from [Analysis → Positioning → Research → Personas] to [Analysis → Positioning → Personas → Research].
-**Why:** Personas are more fundamental inputs — channel strategy and research are more useful when they know who the personas are. Research was added after personas to validate/deepen the strategy, not before it.
-
-### Decision 7: Persona generation does not require Research report
-**What:** `/mvp/personas/generate` was changed to use the analysis report + positioning (not research report) as its inputs.
-**Why:** The original code required research to exist before personas could be generated. After personas were moved before research in the workflow, this created a hard 404 blocker. The fix uses competitive benchmarking data + positioning as richer, more specific inputs that are already available at this point.
-
-### Decision 8: Customer review snippets fed into persona generation
-**What:** Real Google Places review text is passed verbatim to the persona builder AI.
-**Why:** Reviews are written in the customer's own voice — they contain authentic language, real pain points, and genuine motivations. AI-generated personas that incorporate real reviews produce more specific and believable pain points, triggers, and messaging than purely AI-inferred ones.
-
-### Decision 9: Hours gap analysis and SWOT generated in the same AI call as competitor enrichment
-**What:** Hours gap analysis and SWOT are added to the `_enrich_with_ai()` prompt in `competitive_benchmarker.py`, not in separate API calls.
-**Why:** Each OpenAI call has latency and cost. Since the competitor data is already loaded in memory for the enrichment call, adding two more output sections to the same prompt is essentially free. The total token count increases slightly but latency stays the same.
-
-### Decision 10: Positioning uses competitive benchmarking data (not old segment analysis)
-**What:** `positioning_copilot.py` was rewritten to extract fields from the competitive benchmarking JSON structure.
-**Why:** The original `positioning_copilot.py` was written for the old segment analysis format (with `segment_attractiveness_analysis`, `recommended_primary_segment` etc.). When the analysis was replaced with competitive benchmarking, the positioning service kept running but was receiving a JSON structure it didn't understand — producing generic, useless output. The rewrite extracts business_type, location, competitor data, and SWOT to produce market-specific positioning.
-
-### Decision 11: No charting library on the frontend
-**What:** The Price vs Rating scatter chart is built with raw SVG.
-**Why:** Adding Recharts or Chart.js for a single chart is over-engineering. An SVG chart in React is about 80 lines of code and zero additional bundle size. A deterministic jitter function (hash of competitor name) prevents dot overlap without randomness.
-
-### Decision 12: Toast auto-dismiss moved into ToastStack component
-**What:** The 2-second auto-dismiss timer lives inside the `Toast` component (per-toast `useEffect`), not in `useMvpWorkflow.js`.
-**Why:** The original implementation used a `setTimeout` inside a `useEffect` with `[msg]` dependency. The cleanup function (`return () => clearTimeout(t)`) was called whenever `msg` changed — which happened constantly during normal workflow actions. This cancelled the dismiss timer, leaving toasts permanently on screen. Moving the timer into each `Toast` component's own lifecycle fixes this cleanly.
-
-### Decision 13: Custom JWT instead of a JWT library
-**What:** JWT encoding/decoding is implemented manually in `auth.py`.
-**Why:** The original developer chose to minimise dependencies. The implementation is correct (HMAC-SHA256, proper expiry, constant-time comparison) but non-standard — it does not produce RFC-compliant JWTs. If you need interoperability with other services, replace with `python-jose` or `PyJWT`.
-
-### Decision 14: Single `config.py` as the settings source of truth
-**What:** Both `config.py` (plain class with `os.getenv`) and `settings.py` (Pydantic BaseSettings) exist. Only `config.py` is used for new features.
-**Why:** There was a bootstrap conflict where Pydantic's `BaseSettings` tried to read `DATABASE_URL` from `.env` but the format didn't match expected patterns in certain environments. `config.py` was created as a simpler fallback. New env vars should be added to `config.py`. `settings.py` exists only for legacy compatibility and should be removed in a future cleanup.
-
-### Decision 15: `AnalysisCards` replaced with `CompetitorCards` in ProjectPanel
-**What:** The Business Profile page session detail view was using `AnalysisCards` (old segment analysis component) to render the competitive benchmarking report.
-**Why:** After the analysis format changed from segment analysis to competitive benchmarking, `AnalysisCards` received a JSON structure with none of the expected fields, rendering a blank card. `CompetitorCards` was built specifically for the new format and replaced it.
-
----
-
-## 17. Known Gotchas and Quirks
-
-### 1. Google Places `REQUEST_DENIED` on first run
-If you see `geocode_status: "geocoding_status:REQUEST_DENIED"` in the diagnostics, the Geocoding API is not enabled for your key. The system will automatically fall back to Text Search — you do not need to fix this unless you want radius-based search.
-
-### 2. `alembic upgrade head` must be run after every pull
-Migrations are not automatically applied. If you see SQLAlchemy column errors on startup, run `alembic upgrade head`.
-
-### 3. pgvector requires the extension in Postgres
-Run `CREATE EXTENSION vector;` in the database before running migrations. If you forget, the `f2b9a8c1d4e7` migration will fail.
-
-### 4. JWT tokens expire after 24 hours
-If the frontend shows 401 errors after a day, the token has expired. The Axios interceptor in `api.js` catches 401s, clears localStorage, and redirects to the login page automatically.
-
-### 5. Changing `JWT_SECRET_KEY` invalidates all existing tokens
-All logged-in users will be immediately logged out if you rotate the secret.
-
-### 6. `can_use_openai()` returns `False` during pytest
-The method checks for `PYTEST_CURRENT_TEST` env var. All AI calls are bypassed in tests, using fallback responses instead. This is intentional to avoid API costs in CI.
-
-### 7. Positioning versions accumulate — no auto-cleanup
-Every call to `/mvp/positioning/generate` creates a new row. Old versions are never deleted. The UI shows the latest first, with older versions in a collapsed history. This is by design (audit trail) but the table will grow over time.
-
-### 8. Persona regeneration deletes existing personas for the same session
-When `/mvp/personas/generate` is called, existing personas linked to the same `source_session_id` are deleted before new ones are written. This is different from positioning (which accumulates versions).
-
-### 9. `mvp_routes.py` has two settings classes in the codebase
-Both `app.core.config.settings` (used by MVP routes and services) and `app.core.settings.settings` (Pydantic-based) exist. Competitive benchmarking and all new services use `config.py`. Do not mix them.
-
-### 10. Frontend `.env` file
-`apps/frontend/.env` sets `VITE_API_URL` if you need to change the backend URL. The default in `api.js` is hardcoded to `http://127.0.0.1:8000/api`. Override this for staging/production deployments.
-
----
-
-## 18. What Is Not Built Yet
-
-The following features were discussed or planned but not yet implemented:
-
-| Feature | Notes |
-|---|---|
-| Export to PDF | Discussed — would generate a printable version of the full marketing strategy |
-| Competitor map view | Google Maps iframe with pins for each competitor — data is available (google_maps_url per competitor) |
-| Re-run / Refresh competitive data | A button to re-fetch fresh Google Places data without redoing the full interview |
-| Email notifications | No email sending is implemented anywhere |
-| Multi-user / Team access | Each project is owned by a single user. No sharing or team roles |
-| Payment / Subscription | No billing system. The product is currently free to run |
-| Production deployment | No production environment exists. Docker files are present but untested end-to-end |
-| Webhook support | No webhooks for async pipeline completion |
-| Mobile responsive design | Partially responsive. Not optimised for mobile |
-| Dark mode | Not implemented |
-| Research page improvements | Research page is functional but visually minimal compared to the redesigned Competitive Benchmarking and Positioning pages |
-
----
-
-*This document was generated from the live codebase as of March 2026. If you are reading this significantly later, verify the code against this document — the codebase evolves faster than documentation.*
+We use a DB-backed cache (`llm_cache` table) keyed by SHA-256 of the agent name + canonical inputs. For competitive benchmarking (the most expensive step — Google Places API calls + LLM enrichment), results are cached for 24 hours. The cache key is computed from inputs that affect the output (business address + interview responses), not the full HTTP payload, so irrelevant field changes don't bust the cache. Cache hits skip the entire pipeline — zero OpenAI calls, zero Google Places calls. Hits/misses/expirations are logged and tracked in Prometheus.

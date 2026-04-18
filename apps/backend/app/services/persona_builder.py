@@ -3,6 +3,8 @@ import json
 from openai import OpenAI
 
 from app.core.config import settings
+from app.core.llm_tracker import tracked_responses
+from app.core.quality_scorer import score_personas
 
 
 def _extract_context(analysis_report: dict, positioning: dict | None) -> dict:
@@ -217,7 +219,8 @@ def generate_personas(
             timeout=25,
             max_retries=1,
         )
-        resp = client.responses.create(model=settings.openai_model, input=prompt)
+        resp = tracked_responses(client, agent="persona_builder",
+            model=settings.openai_model, input=prompt)
         raw = resp.output_text.strip()
         if raw.startswith("```"):
             raw = raw.split("```")[1]
@@ -230,6 +233,7 @@ def generate_personas(
         cleaned = [p for p in personas[:num_personas] if isinstance(p, dict) and "name" in p]
         if len(cleaned) < 2:
             return _fallback_personas(ctx["business_type"], ctx["location"])[:num_personas]
+        score_personas(cleaned)
         return cleaned
     except Exception:
         return _fallback_personas(ctx["business_type"], ctx["location"])[:num_personas]

@@ -1,0 +1,1392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MarketPilot AI — Project Showcase</title>
+  <style>
+    :root {
+      --red: #c72832;
+      --red-dark: #9e1f28;
+      --red-light: #f9e5e6;
+      --dark: #0f1117;
+      --dark2: #161b27;
+      --dark3: #1e2538;
+      --border: #2a3250;
+      --text: #e2e8f0;
+      --muted: #8892aa;
+      --accent: #38bdf8;
+      --green: #34d399;
+      --yellow: #fbbf24;
+      --purple: #a78bfa;
+      --orange: #fb923c;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--dark);
+      color: var(--text);
+      line-height: 1.6;
+    }
+
+    /* ─── HERO ─── */
+    .hero {
+      background: linear-gradient(135deg, #0f1117 0%, #1a0a0c 50%, #0f1117 100%);
+      border-bottom: 1px solid var(--border);
+      padding: 80px 24px 60px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse 800px 400px at 50% 0%, rgba(199,40,50,0.12) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .logo-mark {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 28px;
+    }
+    .logo-icon {
+      width: 52px; height: 52px;
+      background: var(--red);
+      border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .logo-icon svg { width: 30px; height: 30px; }
+    .logo-text { font-size: 28px; font-weight: 700; letter-spacing: -0.5px; }
+    .logo-text span { color: var(--red); }
+
+    .hero h1 {
+      font-size: clamp(2rem, 5vw, 3.5rem);
+      font-weight: 800;
+      line-height: 1.15;
+      letter-spacing: -1px;
+      margin-bottom: 20px;
+    }
+    .hero h1 em { color: var(--red); font-style: normal; }
+    .hero p.subtitle {
+      font-size: 1.2rem;
+      color: var(--muted);
+      max-width: 680px;
+      margin: 0 auto 36px;
+    }
+
+    .badges {
+      display: flex; flex-wrap: wrap; gap: 10px;
+      justify-content: center; margin-bottom: 40px;
+    }
+    .badge {
+      padding: 6px 16px;
+      border-radius: 999px;
+      font-size: 13px; font-weight: 600;
+      border: 1px solid;
+    }
+    .badge-red   { background: rgba(199,40,50,.15); border-color: rgba(199,40,50,.4); color: #f87171; }
+    .badge-blue  { background: rgba(56,189,248,.1);  border-color: rgba(56,189,248,.3); color: var(--accent); }
+    .badge-green { background: rgba(52,211,153,.1);  border-color: rgba(52,211,153,.3); color: var(--green); }
+    .badge-purple{ background: rgba(167,139,250,.1); border-color: rgba(167,139,250,.3); color: var(--purple); }
+    .badge-orange{ background: rgba(251,146,60,.1);  border-color: rgba(251,146,60,.3); color: var(--orange); }
+    .badge-yellow{ background: rgba(251,191,36,.1);  border-color: rgba(251,191,36,.3); color: var(--yellow); }
+
+    /* ─── STATS ROW ─── */
+    .stats {
+      display: flex; flex-wrap: wrap; justify-content: center;
+      gap: 1px; background: var(--border);
+      border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+    }
+    .stat {
+      flex: 1; min-width: 130px;
+      background: var(--dark2);
+      padding: 24px 16px; text-align: center;
+    }
+    .stat-num { font-size: 2rem; font-weight: 800; color: var(--red); line-height: 1; }
+    .stat-label { font-size: 12px; color: var(--muted); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+    /* ─── LAYOUT ─── */
+    .container { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+    .section { padding: 72px 0; border-bottom: 1px solid var(--border); }
+    .section-label {
+      font-size: 12px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 1.5px; color: var(--red); margin-bottom: 8px;
+    }
+    .section-title {
+      font-size: clamp(1.6rem, 3vw, 2.2rem);
+      font-weight: 800; letter-spacing: -0.5px; margin-bottom: 12px;
+    }
+    .section-desc { color: var(--muted); max-width: 640px; margin-bottom: 48px; font-size: 1.05rem; }
+
+    /* ─── CARDS ─── */
+    .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(480px, 1fr)); gap: 20px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+    .grid-4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+
+    .card {
+      background: var(--dark2);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 24px;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .card:hover { border-color: rgba(199,40,50,.5); box-shadow: 0 0 30px rgba(199,40,50,.08); }
+    .card-icon {
+      width: 42px; height: 42px; border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px; margin-bottom: 14px;
+    }
+    .card h3 { font-size: 1rem; font-weight: 700; margin-bottom: 8px; }
+    .card p  { font-size: 0.875rem; color: var(--muted); line-height: 1.65; }
+
+    .tag-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+    .tag {
+      font-size: 11px; font-weight: 600; padding: 3px 10px;
+      border-radius: 4px; background: var(--dark3); color: var(--muted);
+      border: 1px solid var(--border);
+    }
+
+    /* ─── ARCHITECTURE DIAGRAM ─── */
+    .arch-diagram {
+      background: var(--dark2);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 40px 32px;
+      margin-bottom: 20px;
+    }
+    .arch-row {
+      display: flex; align-items: center; gap: 0; margin-bottom: 0;
+    }
+    .arch-layer {
+      flex: 1;
+      background: var(--dark3);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 18px 16px;
+      text-align: center;
+    }
+    .arch-layer-title {
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 1px; margin-bottom: 12px;
+    }
+    .arch-items { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+    .arch-item {
+      font-size: 11px; padding: 4px 10px;
+      border-radius: 5px; font-weight: 500;
+    }
+    .arch-arrow {
+      color: var(--muted); font-size: 20px;
+      padding: 0 12px; flex-shrink: 0;
+    }
+    .arch-sep {
+      display: flex; align-items: center;
+      gap: 12px; margin: 16px 0;
+      color: var(--muted); font-size: 12px;
+    }
+    .arch-sep::before, .arch-sep::after {
+      content: ''; flex: 1; height: 1px; background: var(--border);
+    }
+
+    /* layer colors */
+    .layer-frontend .arch-layer-title { color: var(--accent); }
+    .layer-frontend .arch-item { background: rgba(56,189,248,.12); color: var(--accent); border: 1px solid rgba(56,189,248,.2); }
+    .layer-api .arch-layer-title { color: var(--green); }
+    .layer-api .arch-item { background: rgba(52,211,153,.1); color: var(--green); border: 1px solid rgba(52,211,153,.2); }
+    .layer-agents .arch-layer-title { color: var(--red); }
+    .layer-agents .arch-item { background: rgba(199,40,50,.12); color: #f87171; border: 1px solid rgba(199,40,50,.25); }
+    .layer-ext .arch-layer-title { color: var(--yellow); }
+    .layer-ext .arch-item { background: rgba(251,191,36,.1); color: var(--yellow); border: 1px solid rgba(251,191,36,.2); }
+    .layer-db .arch-layer-title { color: var(--purple); }
+    .layer-db .arch-item { background: rgba(167,139,250,.1); color: var(--purple); border: 1px solid rgba(167,139,250,.2); }
+
+    /* ─── PIPELINE FLOW ─── */
+    .pipeline {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 0;
+      background: var(--dark2); border: 1px solid var(--border);
+      border-radius: 14px; padding: 28px 24px;
+    }
+    .pipe-step {
+      background: var(--dark3);
+      border: 1px solid var(--border);
+      border-radius: 8px; padding: 12px 16px;
+      text-align: center; flex: 1; min-width: 120px;
+    }
+    .pipe-step-num {
+      font-size: 10px; font-weight: 700; color: var(--red);
+      text-transform: uppercase; letter-spacing: 1px;
+    }
+    .pipe-step-name { font-size: 13px; font-weight: 600; margin-top: 4px; }
+    .pipe-step-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .pipe-arrow { color: var(--muted); padding: 0 8px; font-size: 18px; flex-shrink: 0; }
+
+    /* ─── TECH STACK TABLE ─── */
+    .tech-table { width: 100%; border-collapse: collapse; }
+    .tech-table th {
+      text-align: left; padding: 10px 16px;
+      font-size: 11px; text-transform: uppercase; letter-spacing: 1px;
+      color: var(--muted); border-bottom: 1px solid var(--border);
+    }
+    .tech-table td {
+      padding: 12px 16px; font-size: 14px;
+      border-bottom: 1px solid rgba(42,50,80,.5);
+      vertical-align: top;
+    }
+    .tech-table tr:last-child td { border-bottom: none; }
+    .tech-table tr:hover td { background: rgba(255,255,255,.02); }
+    .tech-name { font-weight: 600; color: var(--text); }
+    .tech-ver { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .tech-purpose { color: var(--muted); font-size: 13px; }
+
+    /* ─── AGENT CARD ─── */
+    .agent-card {
+      background: var(--dark2);
+      border: 1px solid var(--border);
+      border-radius: 14px; padding: 22px;
+      transition: border-color 0.2s;
+    }
+    .agent-card:hover { border-color: rgba(199,40,50,.4); }
+    .agent-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+    .agent-num {
+      width: 28px; height: 28px; border-radius: 7px;
+      background: rgba(199,40,50,.2); color: var(--red);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 800; flex-shrink: 0;
+    }
+    .agent-name { font-size: 15px; font-weight: 700; }
+    .agent-file { font-size: 11px; color: var(--muted); font-family: monospace; }
+    .agent-desc { font-size: 13px; color: var(--muted); margin-bottom: 10px; line-height: 1.6; }
+    .agent-techniques { display: flex; flex-wrap: wrap; gap: 5px; }
+    .technique {
+      font-size: 11px; padding: 3px 9px; border-radius: 4px; font-weight: 500;
+      background: rgba(167,139,250,.1); color: var(--purple);
+      border: 1px solid rgba(167,139,250,.2);
+    }
+
+    /* ─── CODE BLOCK ─── */
+    .code-block {
+      background: #0d1117; border: 1px solid var(--border);
+      border-radius: 10px; padding: 20px 24px;
+      font-family: 'Consolas', 'Fira Code', monospace;
+      font-size: 13px; line-height: 1.7; overflow-x: auto;
+      margin: 16px 0;
+    }
+    .code-comment { color: #6e7681; }
+    .code-keyword { color: #ff7b72; }
+    .code-string  { color: #a5d6ff; }
+    .code-func    { color: #d2a8ff; }
+    .code-num     { color: #79c0ff; }
+
+    /* ─── INNOVATION HIGHLIGHT ─── */
+    .highlight-box {
+      background: linear-gradient(135deg, rgba(199,40,50,.08), rgba(167,139,250,.05));
+      border: 1px solid rgba(199,40,50,.25);
+      border-radius: 14px; padding: 28px;
+      margin: 24px 0;
+    }
+    .highlight-box h3 { color: var(--red); font-size: 1.1rem; margin-bottom: 8px; }
+    .highlight-box p  { color: var(--muted); font-size: 14px; line-height: 1.7; }
+
+    /* ─── INFRA CARD ─── */
+    .infra-card {
+      background: var(--dark2); border: 1px solid var(--border);
+      border-radius: 14px; padding: 24px;
+    }
+    .infra-card h3 { font-size: 15px; font-weight: 700; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+    .infra-list { list-style: none; }
+    .infra-list li {
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 8px 0; border-bottom: 1px solid rgba(42,50,80,.5);
+      font-size: 13px; color: var(--muted);
+    }
+    .infra-list li:last-child { border-bottom: none; }
+    .infra-list li span:first-child { color: var(--green); flex-shrink: 0; margin-top: 2px; }
+
+    /* ─── FOOTER ─── */
+    .footer {
+      background: var(--dark2); border-top: 1px solid var(--border);
+      padding: 40px 24px; text-align: center;
+      color: var(--muted); font-size: 14px;
+    }
+    .footer a { color: var(--red); text-decoration: none; }
+    .footer a:hover { text-decoration: underline; }
+
+    /* ─── RESPONSIVE ─── */
+    @media (max-width: 640px) {
+      .grid-2 { grid-template-columns: 1fr; }
+      .pipe-arrow { display: none; }
+      .pipeline { gap: 8px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ══════════ HERO ══════════ -->
+<section class="hero">
+  <div class="logo-mark">
+    <div class="logo-icon">
+      <svg viewBox="0 0 32 32" fill="none">
+        <rect x="4"  y="20" width="4" height="8" rx="1" fill="white" opacity="0.85"/>
+        <rect x="10" y="14" width="4" height="14" rx="1" fill="white"/>
+        <rect x="16" y="8"  width="4" height="20" rx="1" fill="white"/>
+        <polyline points="17,5 20,7.5 23,5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+    <span class="logo-text">Market<span>Pilot</span> AI</span>
+  </div>
+
+  <h1>AI-Powered Marketing<br><em>Strategy Platform</em></h1>
+  <p class="subtitle">
+    A production-grade SaaS that transforms a 10-minute marketing interview into a complete
+    90-day go-to-market strategy — powered by LLM orchestration, semantic RAG, real-time competitive intelligence, and a full MLOps observability stack.
+  </p>
+
+  <div class="badges">
+    <span class="badge badge-red">OpenAI GPT-4o-mini</span>
+    <span class="badge badge-blue">FastAPI + React</span>
+    <span class="badge badge-green">pgvector RAG</span>
+    <span class="badge badge-purple">DALL-E 3 Image Gen</span>
+    <span class="badge badge-yellow">Google Places API</span>
+    <span class="badge badge-orange">Cloud Run + Firebase</span>
+    <span class="badge badge-red">LLM Observability</span>
+    <span class="badge badge-green">Sentry + Prometheus</span>
+  </div>
+</section>
+
+<!-- ══════════ STATS ══════════ -->
+<div class="stats">
+  <div class="stat"><div class="stat-num">10</div><div class="stat-label">AI Agents</div></div>
+  <div class="stat"><div class="stat-num">30+</div><div class="stat-label">LLM Prompts</div></div>
+  <div class="stat"><div class="stat-num">15</div><div class="stat-label">API Endpoints</div></div>
+  <div class="stat"><div class="stat-num">15</div><div class="stat-label">DB Tables</div></div>
+  <div class="stat"><div class="stat-num">7</div><div class="stat-label">AI Metrics</div></div>
+  <div class="stat"><div class="stat-num">1536</div><div class="stat-label">Vector Dimensions</div></div>
+  <div class="stat"><div class="stat-num">90</div><div class="stat-label">Day Roadmap</div></div>
+</div>
+
+<!-- ══════════ ARCHITECTURE ══════════ -->
+<section class="section">
+  <div class="container">
+    <div class="section-label">System Design</div>
+    <h2 class="section-title">Application Architecture</h2>
+    <p class="section-desc">Five-layer architecture with clean separation of concerns — from the React SPA to the PostgreSQL + pgvector data layer.</p>
+
+    <div class="arch-diagram">
+      <!-- Layer 1: Frontend -->
+      <div class="layer-frontend">
+        <div class="arch-layer">
+          <div class="arch-layer-title">Frontend Layer — React 19 + Vite</div>
+          <div class="arch-items">
+            <span class="arch-item">LandingPage</span>
+            <span class="arch-item">QuestionnairePage</span>
+            <span class="arch-item">AnalysisPage</span>
+            <span class="arch-item">PositioningPage</span>
+            <span class="arch-item">PersonasPage</span>
+            <span class="arch-item">StrategyPage</span>
+            <span class="arch-item">RoadmapPage</span>
+            <span class="arch-item">ContentPage</span>
+            <span class="arch-item">useMvpWorkflow (global state)</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="arch-sep">↕ HTTPS / REST + JWT Auth</div>
+
+      <!-- Layer 2: API -->
+      <div class="layer-api">
+        <div class="arch-layer">
+          <div class="arch-layer-title">API Layer — FastAPI + Uvicorn</div>
+          <div class="arch-items">
+            <span class="arch-item">/questionnaire</span>
+            <span class="arch-item">/analysis</span>
+            <span class="arch-item">/positioning</span>
+            <span class="arch-item">/personas</span>
+            <span class="arch-item">/research</span>
+            <span class="arch-item">/strategy</span>
+            <span class="arch-item">/roadmap</span>
+            <span class="arch-item">/content</span>
+            <span class="arch-item">Rate Limiting (slowapi)</span>
+            <span class="arch-item">Prometheus Metrics</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="arch-sep">↕ Service Layer Calls</div>
+
+      <!-- Layer 3: Agents -->
+      <div class="layer-agents">
+        <div class="arch-layer">
+          <div class="arch-layer-title">AI Agent Layer — 10 Specialized Services</div>
+          <div class="arch-items">
+            <span class="arch-item">Onboarding Interviewer</span>
+            <span class="arch-item">Competitive Benchmarker</span>
+            <span class="arch-item">Segment Analyst</span>
+            <span class="arch-item">Positioning Copilot</span>
+            <span class="arch-item">Persona Builder</span>
+            <span class="arch-item">Market Researcher</span>
+            <span class="arch-item">Channel Strategy Planner</span>
+            <span class="arch-item">Roadmap Planner</span>
+            <span class="arch-item">Content Studio</span>
+            <span class="arch-item">Memory Store (RAG)</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="arch-sep">↕ External API Calls</div>
+
+      <!-- Layer 4: External -->
+      <div class="layer-ext">
+        <div class="arch-layer">
+          <div class="arch-layer-title">External Services</div>
+          <div class="arch-items">
+            <span class="arch-item">OpenAI Chat (gpt-4o-mini)</span>
+            <span class="arch-item">OpenAI Embeddings (text-embedding-3-small)</span>
+            <span class="arch-item">DALL-E 3</span>
+            <span class="arch-item">Google Places API</span>
+            <span class="arch-item">Google Geocoding API</span>
+            <span class="arch-item">SendGrid Email</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="arch-sep">↕ SQLAlchemy ORM + psycopg v3</div>
+
+      <!-- Layer 5: DB -->
+      <div class="layer-db">
+        <div class="arch-layer">
+          <div class="arch-layer-title">Data Layer — PostgreSQL (Supabase) + pgvector</div>
+          <div class="arch-items">
+            <span class="arch-item">users</span>
+            <span class="arch-item">projects</span>
+            <span class="arch-item">questionnaire_sessions</span>
+            <span class="arch-item">analysis_reports</span>
+            <span class="arch-item">positioning_statements</span>
+            <span class="arch-item">persona_profiles</span>
+            <span class="arch-item">channel_strategies</span>
+            <span class="arch-item">roadmap_plans</span>
+            <span class="arch-item">media_assets</span>
+            <span class="arch-item">memory_chunks (Vector 1536)</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ AI PIPELINE ══════════ -->
+<section class="section">
+  <div class="container">
+    <div class="section-label">Core Workflow</div>
+    <h2 class="section-title">Interview → Strategy Pipeline</h2>
+    <p class="section-desc">Each step enriches a shared context object that flows through every subsequent agent — progressive intelligence building.</p>
+
+    <div class="pipeline">
+      <div class="pipe-step">
+        <div class="pipe-step-num">Step 1</div>
+        <div class="pipe-step-name">Adaptive Interview</div>
+        <div class="pipe-step-sub">~10 min chat Q&A</div>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-step">
+        <div class="pipe-step-num">Step 2</div>
+        <div class="pipe-step-name">Competitive Scan</div>
+        <div class="pipe-step-sub">Google Places + Embeddings</div>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-step">
+        <div class="pipe-step-num">Step 3</div>
+        <div class="pipe-step-name">Market Analysis</div>
+        <div class="pipe-step-sub">TAM/SAM + SWOT</div>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-step">
+        <div class="pipe-step-num">Step 4</div>
+        <div class="pipe-step-name">Positioning</div>
+        <div class="pipe-step-sub">Differentiation statement</div>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-step">
+        <div class="pipe-step-num">Step 5</div>
+        <div class="pipe-step-name">Buyer Personas</div>
+        <div class="pipe-step-sub">3 psychographic profiles</div>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-step">
+        <div class="pipe-step-num">Step 6</div>
+        <div class="pipe-step-name">Channel Strategy</div>
+        <div class="pipe-step-sub">Budget-split plan</div>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-step">
+        <div class="pipe-step-num">Step 7</div>
+        <div class="pipe-step-name">90-Day Roadmap</div>
+        <div class="pipe-step-sub">Week-by-week KPIs</div>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-step">
+        <div class="pipe-step-num">Step 8</div>
+        <div class="pipe-step-name">Content Assets</div>
+        <div class="pipe-step-sub">Text + DALL-E visuals</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ AI AGENTS ══════════ -->
+<section class="section">
+  <div class="container">
+    <div class="section-label">Agent Layer</div>
+    <h2 class="section-title">10 Specialized AI Agents</h2>
+    <p class="section-desc">Each agent owns a single domain, uses structured JSON prompting, and has deterministic fallback heuristics for 100% uptime without AI APIs.</p>
+
+    <div class="grid-2">
+
+      <div class="agent-card">
+        <div class="agent-header">
+          <div class="agent-num">01</div>
+          <div>
+            <div class="agent-name">Onboarding Interviewer</div>
+            <div class="agent-file">onboarding_interviewer.py</div>
+          </div>
+        </div>
+        <div class="agent-desc">Generates adaptive follow-up questions based on topic coverage gaps. Deduplicates semantically similar questions and analyzes full interview transcripts into structured marketing insights.</div>
+        <div class="agent-techniques">
+          <span class="technique">Topic Coverage Tracking</span>
+          <span class="technique">Jaccard Similarity Dedup</span>
+          <span class="technique">Structured JSON Output</span>
+          <span class="technique">Fallback Q Templates</span>
+        </div>
+      </div>
+
+      <div class="agent-card">
+        <div class="agent-header">
+          <div class="agent-num">02</div>
+          <div>
+            <div class="agent-name">Competitive Benchmarker</div>
+            <div class="agent-file">competitive_benchmarker.py</div>
+          </div>
+        </div>
+        <div class="agent-desc">Discovers real local competitors via Google Places, ranks them by semantic relevance using cosine similarity on OpenAI embeddings, enriches top 5 with AI-extracted business intelligence, and generates SWOT + opportunity gap analysis.</div>
+        <div class="agent-techniques">
+          <span class="technique">Vector Embeddings</span>
+          <span class="technique">Cosine Similarity Ranking</span>
+          <span class="technique">Google Places API</span>
+          <span class="technique">Multi-stage Geocoding</span>
+          <span class="technique">SWOT Generation</span>
+        </div>
+      </div>
+
+      <div class="agent-card">
+        <div class="agent-header">
+          <div class="agent-num">03</div>
+          <div>
+            <div class="agent-name">Segment Analyst</div>
+            <div class="agent-file">segment_analyst.py</div>
+          </div>
+        </div>
+        <div class="agent-desc">Produces comprehensive market analysis with TAM/SAM/SOM estimates, CAC/LTV unit economics, segment attractiveness scoring, channel mix efficiency, pricing power, retention risk, and 3 growth scenarios. Also powers a chat Q&A copilot over the analysis report using RAG memory retrieval.</div>
+        <div class="agent-techniques">
+          <span class="technique">TAM/SAM/SOM Estimation</span>
+          <span class="technique">CAC/LTV Modeling</span>
+          <span class="technique">RAG Q&A Copilot</span>
+          <span class="technique">Heuristic Scoring</span>
+          <span class="technique">Risk Register</span>
+        </div>
+      </div>
+
+      <div class="agent-card">
+        <div class="agent-header">
+          <div class="agent-num">04</div>
+          <div>
+            <div class="agent-name">Positioning Copilot</div>
+            <div class="agent-file">positioning_copilot.py</div>
+          </div>
+        </div>
+        <div class="agent-desc">Generates differentiated brand positioning statements by cross-referencing competitor intelligence, SWOT gaps, and interview context. Supports iterative refinement with owner feedback.</div>
+        <div class="agent-techniques">
+          <span class="technique">Competitive Gap Analysis</span>
+          <span class="technique">Context Injection</span>
+          <span class="technique">Iterative Refinement</span>
+          <span class="technique">Template Fallback</span>
+        </div>
+      </div>
+
+      <div class="agent-card">
+        <div class="agent-header">
+          <div class="agent-num">05</div>
+          <div>
+            <div class="agent-name">Persona Builder</div>
+            <div class="agent-file">persona_builder.py</div>
+          </div>
+        </div>
+        <div class="agent-desc">Creates 3 psychographically distinct buyer personas grounded in real Google review language. Each persona includes basic profile, psychographic profile, behavioral triggers, and channel engagement strategy.</div>
+        <div class="agent-techniques">
+          <span class="technique">Customer Voice Mining</span>
+          <span class="technique">Psychographic Segmentation</span>
+          <span class="technique">JSON Schema Validation</span>
+          <span class="technique">Segment Differentiation</span>
+        </div>
+      </div>
+
+      <div class="agent-card">
+        <div class="agent-header">
+          <div class="agent-num">06</div>
+          <div>
+            <div class="agent-name">Market Researcher</div>
+            <div class="agent-file">market_researcher.py</div>
+          </div>
+        </div>
+        <div class="agent-desc">Synthesizes interview responses, competitive data, and personas into structured customer and competitor insights with theme/insight pairs and actionable implications.</div>
+        <div class="agent-techniques">
+          <span class="technique">Multi-source Synthesis</span>
+          <span class="technique">Insight Extraction</span>
+          <span class="technique">Structured JSON Output</span>
+        </div>
+      </div>
+
+      <div class="agent-card">
+        <div class="agent-header">
+          <div class="agent-num">07</div>
+          <div>
+            <div class="agent-name">Channel Strategy Planner</div>
+            <div class="agent-file">channel_strategy_planner.py</div>
+          </div>
+        </div>
+        <div class="agent-desc">Recommends 3–5 prioritized marketing channels with weekly actions, key messages, and budget allocation (40/35/25 split) based on personas and market research.</div>
+        <div class="agent-techniques">
+          <span class="technique">Budget Allocation</span>
+          <span class="technique">Channel Prioritization</span>
+          <span class="technique">Persona-driven Targeting</span>
+        </div>
+      </div>
+
+      <div class="agent-card">
+        <div class="agent-header">
+          <div class="agent-num">08</div>
+          <div>
+            <div class="agent-name">Roadmap Planner</div>
+            <div class="agent-file">roadmap_planner.py</div>
+          </div>
+        </div>
+        <div class="agent-desc">Builds a week-by-week 90-day implementation playbook divided into Foundation (1–4), Execution (5–9), and Optimization (10–12) phases with tasks, owners, and KPIs per week.</div>
+        <div class="agent-techniques">
+          <span class="technique">Phased Planning</span>
+          <span class="technique">KPI Assignment</span>
+          <span class="technique">Milestone Tracking</span>
+        </div>
+      </div>
+
+      <div class="agent-card">
+        <div class="agent-header">
+          <div class="agent-num">09</div>
+          <div>
+            <div class="agent-name">Content Studio</div>
+            <div class="agent-file">content_studio.py</div>
+          </div>
+        </div>
+        <div class="agent-desc">Two-stage visual and text content generation. For visuals: GPT-4o-mini generates a design brief + DALL-E prompt, then DALL-E 3 renders the image as base64 (permanent, not expiring URL). Supports social posts, email newsletters, ad copy, logos, banners, and more.</div>
+        <div class="agent-techniques">
+          <span class="technique">DALL-E 3 Image Generation</span>
+          <span class="technique">Two-stage Prompting</span>
+          <span class="technique">base64 Storage</span>
+          <span class="technique">Tone Variants (5 tones)</span>
+          <span class="technique">Multi-format Output</span>
+        </div>
+      </div>
+
+      <div class="agent-card">
+        <div class="agent-header">
+          <div class="agent-num">10</div>
+          <div>
+            <div class="agent-name">Memory Store (RAG)</div>
+            <div class="agent-file">memory_store.py</div>
+          </div>
+        </div>
+        <div class="agent-desc">Embeds interview Q&A chunks using text-embedding-3-small and stores 1536-dimensional vectors in PostgreSQL via pgvector. Enables semantic similarity search to retrieve relevant context for the Analysis Q&A copilot.</div>
+        <div class="agent-techniques">
+          <span class="technique">RAG Architecture</span>
+          <span class="technique">pgvector (1536-dim)</span>
+          <span class="technique">Semantic Search</span>
+          <span class="technique">psycopg v3 Integration</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ KEY INNOVATIONS ══════════ -->
+<section class="section">
+  <div class="container">
+    <div class="section-label">Engineering Highlights</div>
+    <h2 class="section-title">Key Technical Innovations</h2>
+    <p class="section-desc">Non-obvious engineering decisions that make this system production-ready and cost-efficient.</p>
+
+    <div class="highlight-box">
+      <h3>Embedding-Based Competitor Ranking (Token Optimization)</h3>
+      <p>Instead of sending all 20 discovered competitors to GPT-4o-mini (expensive, slow), the system first embeds each competitor's basic profile using <strong>text-embedding-3-small</strong> (~$0.0001), computes cosine similarity against the business context vector, and selects only the top 5. The LLM only sees highly relevant competitors — reducing token usage 4x and eliminating timeouts.</p>
+    </div>
+
+    <div class="code-block">
+<span class="code-comment"># Rank competitors by semantic relevance BEFORE expensive LLM enrichment</span>
+<span class="code-keyword">def</span> <span class="code-func">_rank_by_relevance</span>(places, business_context, top_n=<span class="code-num">5</span>):
+    competitor_texts = [_competitor_to_text(p) <span class="code-keyword">for</span> p <span class="code-keyword">in</span> places]
+    all_texts = [business_context] + competitor_texts
+
+    resp = client.embeddings.create(
+        model=<span class="code-string">"text-embedding-3-small"</span>, input=all_texts
+    )
+    vectors = [item.embedding <span class="code-keyword">for</span> item <span class="code-keyword">in</span> resp.data]
+    query_vec = np.array(vectors[<span class="code-num">0</span>])
+
+    <span class="code-comment"># Cosine similarity: sim(a,b) = dot(a,b) / (||a|| * ||b||)</span>
+    scores = [
+        np.dot(query_vec, np.array(v)) /
+        (np.linalg.norm(query_vec) * np.linalg.norm(np.array(v)))
+        <span class="code-keyword">for</span> v <span class="code-keyword">in</span> vectors[<span class="code-num">1</span>:]
+    ]
+    ranked = sorted(zip(places, scores), key=<span class="code-keyword">lambda</span> x: x[<span class="code-num">1</span>], reverse=<span class="code-keyword">True</span>)
+    <span class="code-keyword">return</span> [p <span class="code-keyword">for</span> p, _ <span class="code-keyword">in</span> ranked[:top_n]]
+    </div>
+
+    <div class="grid-3" style="margin-top: 24px;">
+
+      <div class="card">
+        <div class="card-icon" style="background: rgba(52,211,153,.15);">🛡️</div>
+        <h3>Graceful Degradation</h3>
+        <p>Every LLM-dependent feature has deterministic fallback heuristics. If OpenAI is unavailable, hardcoded defaults kick in — questionnaire templates, rule-based scoring, template personas. Zero downtime.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-icon" style="background: rgba(56,189,248,.15);">🗄️</div>
+        <h3>pgvector + psycopg v3</h3>
+        <p>SQLAlchemy <code>connect</code> event registers pgvector type on every new connection. Without this, psycopg v3 silently stores embeddings as NULL — a subtle integration pitfall solved with one event listener.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-icon" style="background: rgba(251,191,36,.15);">🌍</div>
+        <h3>Regional API Routing</h3>
+        <p>OpenAI regional API keys require region-specific base URLs (<code>us.api.openai.com</code>). Config validates the base URL at startup and surfaces actionable errors rather than cryptic 401s.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-icon" style="background: rgba(167,139,250,.15);">📐</div>
+        <h3>Structured LLM Outputs</h3>
+        <p>All 30+ LLM prompts return structured JSON validated against Pydantic schemas. Malformed responses are caught, logged, and fallback data is returned — ensuring the frontend never receives broken state.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-icon" style="background: rgba(199,40,50,.15);">🔍</div>
+        <h3>Multi-Stage Geocoding</h3>
+        <p>Address → Geocode → Nearby Search (1km radius, auto-expands to 2km). Falls back to text-based Place Search if geocoding fails — handles partial addresses, rural locations, and API rate limits.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-icon" style="background: rgba(251,146,60,.15);">📊</div>
+        <h3>Prometheus Observability</h3>
+        <p>Every FastAPI route is instrumented with Prometheus metrics — request counts, latency histograms, OpenAI call tracking. Rate limiting via slowapi prevents abuse on public endpoints.</p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ OBSERVABILITY & MLOPS ══════════ -->
+<section class="section">
+  <div class="container">
+    <div class="section-label">Production AI Engineering</div>
+    <h2 class="section-title">Observability, Evaluation &amp; Optimization</h2>
+    <p class="section-desc">A full-stack MLOps layer built on top of the AI pipeline — giving complete visibility into cost, quality, latency, and reliability of every LLM call in production.</p>
+
+    <!-- Observability Stack Visual -->
+    <div class="arch-diagram" style="margin-bottom: 32px;">
+      <div style="text-align: center; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); margin-bottom: 24px;">Observability Stack (All Running in Production)</div>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+        <div style="background: rgba(56,189,248,.08); border: 1px solid rgba(56,189,248,.2); border-radius: 10px; padding: 16px; text-align: center;">
+          <div style="font-size: 22px; margin-bottom: 8px;">📋</div>
+          <div style="font-size: 13px; font-weight: 700; color: var(--accent);">Structured Logging</div>
+          <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">JSON → Cloud Logging<br>severity + indexed fields</div>
+        </div>
+        <div style="background: rgba(199,40,50,.08); border: 1px solid rgba(199,40,50,.2); border-radius: 10px; padding: 16px; text-align: center;">
+          <div style="font-size: 22px; margin-bottom: 8px;">💰</div>
+          <div style="font-size: 13px; font-weight: 700; color: #f87171;">LLM Cost Tracking</div>
+          <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">Per-agent token counts<br>+ cost estimation</div>
+        </div>
+        <div style="background: rgba(52,211,153,.08); border: 1px solid rgba(52,211,153,.2); border-radius: 10px; padding: 16px; text-align: center;">
+          <div style="font-size: 22px; margin-bottom: 8px;">🎯</div>
+          <div style="font-size: 13px; font-weight: 700; color: var(--green);">Output Quality Scoring</div>
+          <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">0.0–1.0 schema<br>completeness check</div>
+        </div>
+        <div style="background: rgba(167,139,250,.08); border: 1px solid rgba(167,139,250,.2); border-radius: 10px; padding: 16px; text-align: center;">
+          <div style="font-size: 22px; margin-bottom: 8px;">⚡</div>
+          <div style="font-size: 13px; font-weight: 700; color: var(--purple);">Response Caching</div>
+          <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">SHA-256 keys · 24h TTL<br>DB-backed upsert</div>
+        </div>
+        <div style="background: rgba(251,191,36,.08); border: 1px solid rgba(251,191,36,.2); border-radius: 10px; padding: 16px; text-align: center;">
+          <div style="font-size: 22px; margin-bottom: 8px;">📊</div>
+          <div style="font-size: 13px; font-weight: 700; color: var(--yellow);">Prometheus Metrics</div>
+          <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">7 AI-specific metrics<br>latency histograms</div>
+        </div>
+        <div style="background: rgba(251,146,60,.08); border: 1px solid rgba(251,146,60,.2); border-radius: 10px; padding: 16px; text-align: center;">
+          <div style="font-size: 22px; margin-bottom: 8px;">🔍</div>
+          <div style="font-size: 13px; font-weight: 700; color: var(--orange);">Sentry APM</div>
+          <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">FastAPI + SQLAlchemy<br>integrations · traces</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid-3">
+
+      <div class="card">
+        <div class="card-icon" style="background: rgba(56,189,248,.15);">📋</div>
+        <h3>Structured JSON Logging</h3>
+        <p>Custom JSON formatter maps Python log levels to Google Cloud Logging severity strings. Every log entry emits structured fields (http_method, path, status, duration_ms) so Cloud Logging can index and query them. Silences noisy third-party libraries (uvicorn.access, httpx).</p>
+        <div class="tag-list"><span class="tag">Cloud Logging</span><span class="tag">JSON Formatter</span><span class="tag">Severity Mapping</span></div>
+      </div>
+
+      <div class="card">
+        <div class="card-icon" style="background: rgba(199,40,50,.15);">💰</div>
+        <h3>LLM Cost &amp; Latency Tracker</h3>
+        <p>Four wrapper functions (<code>tracked_responses</code>, <code>tracked_chat</code>, <code>tracked_embeddings</code>, <code>tracked_image</code>) capture token counts, compute real-time cost estimates (gpt-4o-mini: $0.15/$0.60 per 1M, embeddings: $0.02/1M, DALL-E 3: $0.04/image), and log latency per agent call.</p>
+        <div class="tag-list"><span class="tag">Token Counting</span><span class="tag">Cost Estimation</span><span class="tag">Latency per Agent</span></div>
+      </div>
+
+      <div class="card">
+        <div class="card-icon" style="background: rgba(52,211,153,.15);">🎯</div>
+        <h3>LLM Output Quality Scoring</h3>
+        <p>Per-agent quality evaluator scores structured LLM outputs 0.0–1.0 based on required keys presence, list length, nested field completeness, and numeric score ranges. Each agent has a custom scorer (<code>score_segment_analysis</code>, <code>score_competitive_benchmarking</code>, etc.) that detects silent failures.</p>
+        <div class="tag-list"><span class="tag">Schema Completeness</span><span class="tag">0.0–1.0 Score</span><span class="tag">Per-agent Wrappers</span></div>
+      </div>
+
+      <div class="card">
+        <div class="card-icon" style="background: rgba(167,139,250,.15);">⚡</div>
+        <h3>DB-Backed Response Cache</h3>
+        <p>SHA-256 cache key from agent name + serialized inputs. <code>get_cached()</code> checks DB before any LLM call; <code>set_cached()</code> upserts on success. 24-hour TTL prevents stale data. Applied to competitive analysis, positioning, personas, and strategy — eliminating redundant LLM calls for identical inputs.</p>
+        <div class="tag-list"><span class="tag">SHA-256</span><span class="tag">TTL Invalidation</span><span class="tag">Upsert</span><span class="tag">Cost Reduction</span></div>
+      </div>
+
+      <div class="card">
+        <div class="card-icon" style="background: rgba(251,191,36,.15);">📊</div>
+        <h3>Prometheus Custom Metrics</h3>
+        <p>7 AI-specific Prometheus counters and histograms: <strong>LLM_CALLS</strong> (by agent/model), <strong>LLM_TOKENS</strong> (input/output), <strong>LLM_COST</strong> (per agent), <strong>LLM_LATENCY</strong> histogram, <strong>LLM_QUALITY</strong> gauge, <strong>PIPELINE_STEP</strong> (pass/fail), <strong>CACHE_OPS</strong> (hit/miss). Exportable to Grafana.</p>
+        <div class="tag-list"><span class="tag">7 Metrics</span><span class="tag">Histograms</span><span class="tag">Grafana-ready</span></div>
+      </div>
+
+      <div class="card">
+        <div class="card-icon" style="background: rgba(251,146,60,.15);">🔍</div>
+        <h3>Sentry Error Tracking &amp; APM</h3>
+        <p>Sentry SDK with <code>FastApiIntegration</code>, <code>SqlalchemyIntegration</code>, and <code>LoggingIntegration</code>. Captures unhandled exceptions with full request context, traces slow DB queries, and links errors to specific pipeline steps. Gated on <code>SENTRY_DSN</code> env var.</p>
+        <div class="tag-list"><span class="tag">Error Capture</span><span class="tag">SQLAlchemy Traces</span><span class="tag">Performance APM</span></div>
+      </div>
+
+      <div class="card">
+        <div class="card-icon" style="background: rgba(199,40,50,.15);">🔗</div>
+        <h3>Pipeline Step Tracing</h3>
+        <p>Context manager <code>trace_step(db, step, project_id)</code> wraps every major AI pipeline call. Records a <code>pipeline_runs</code> DB row with start time, end time, <code>duration_ms</code>, status, and error message. Every analysis, positioning, persona, and strategy call is fully traced.</p>
+        <div class="tag-list"><span class="tag">Context Manager</span><span class="tag">duration_ms</span><span class="tag">pipeline_runs Table</span></div>
+      </div>
+
+      <div class="card">
+        <div class="card-icon" style="background: rgba(56,189,248,.15);">🧪</div>
+        <h3>RAG Retrieval Evaluation</h3>
+        <p>After each semantic memory retrieval, computes per-chunk cosine similarity between query vector and result vectors using NumPy. Logs <code>avg_similarity</code>, <code>min_similarity</code>, and a <code>low_relevance</code> flag when min similarity drops below 0.75 — enabling detection of poor-quality RAG retrievals.</p>
+        <div class="tag-list"><span class="tag">Cosine Similarity</span><span class="tag">Quality Gate</span><span class="tag">Retrieval Metrics</span></div>
+      </div>
+
+      <div class="card">
+        <div class="card-icon" style="background: rgba(52,211,153,.15);">✂️</div>
+        <h3>Token Budget Enforcement</h3>
+        <p>Per-agent prompt token budgets (segment_analyst: 3000, chat: 2000, memory_context: 600, chat_history: 400). <code>trim_str()</code> and <code>trim_list()</code> enforce limits before prompts are sent, logging <code>token_budget_exceeded</code> warnings when truncation occurs. Prevents runaway costs from large context windows.</p>
+        <div class="tag-list"><span class="tag">Per-agent Budgets</span><span class="tag">trim_str / trim_list</span><span class="tag">Cost Guard</span></div>
+      </div>
+
+    </div>
+
+    <!-- Code sample: cache + trace pattern -->
+    <div style="margin-top: 32px;">
+      <div style="font-size: 13px; font-weight: 700; color: var(--muted); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1px;">Cache-then-Trace Pattern (applied to every pipeline step)</div>
+      <div class="code-block">
+<span class="code-comment"># 1. Check cache first — skip LLM entirely if result exists</span>
+cache_key = <span class="code-func">make_cache_key</span>(<span class="code-string">"competitive_benchmarker"</span>, {<span class="code-string">"address"</span>: address, <span class="code-string">"responses"</span>: responses})
+report = <span class="code-func">get_cached</span>(db, cache_key, ttl_hours=<span class="code-num">24</span>)
+
+<span class="code-keyword">if</span> report <span class="code-keyword">is</span> <span class="code-keyword">None</span>:
+    <span class="code-comment"># 2. Trace the LLM call — record start/end, duration_ms, status</span>
+    <span class="code-keyword">with</span> <span class="code-func">trace_step</span>(db, step=<span class="code-string">"competitive_benchmarker"</span>, project_id=project_id):
+        report = <span class="code-func">run_competitive_benchmarking</span>(responses, business_address)
+    <span class="code-comment"># 3. Store result for future requests</span>
+    <span class="code-func">set_cached</span>(db, cache_key, agent=<span class="code-string">"competitive_benchmarker"</span>, payload=report)
+
+<span class="code-comment"># Inside run_competitive_benchmarking — every OpenAI call is tracked</span>
+resp = <span class="code-func">tracked_responses</span>(client, agent=<span class="code-string">"competitive_benchmarker"</span>,
+    model=<span class="code-string">"gpt-4o-mini"</span>, input=[...])  <span class="code-comment"># logs tokens, cost, latency</span>
+quality = <span class="code-func">score_competitive_benchmarking</span>(result)  <span class="code-comment"># 0.0–1.0 quality check</span>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ══════════ TECH STACK ══════════ -->
+<section class="section">
+  <div class="container">
+    <div class="section-label">Technologies</div>
+    <h2 class="section-title">Full Tech Stack</h2>
+    <p class="section-desc">Chosen for production reliability, cost efficiency, and developer experience.</p>
+
+    <div class="grid-2">
+      <div style="background: var(--dark2); border: 1px solid var(--border); border-radius: 14px; overflow: hidden;">
+        <div style="padding: 16px 20px; border-bottom: 1px solid var(--border); font-size: 13px; font-weight: 700; color: var(--accent);">Backend</div>
+        <table class="tech-table">
+          <tr>
+            <td><div class="tech-name">FastAPI</div><div class="tech-ver">0.133.1</div></td>
+            <td class="tech-purpose">Async REST API framework with automatic OpenAPI docs</td>
+          </tr>
+          <tr>
+            <td><div class="tech-name">OpenAI SDK</div><div class="tech-ver">2.24.0</div></td>
+            <td class="tech-purpose">Chat completions, embeddings, DALL-E 3 image generation</td>
+          </tr>
+          <tr>
+            <td><div class="tech-name">SQLAlchemy</div><div class="tech-ver">2.0.47</div></td>
+            <td class="tech-purpose">ORM with async support, connect event hooks for pgvector</td>
+          </tr>
+          <tr>
+            <td><div class="tech-name">psycopg v3</div><div class="tech-ver">3.3.3</div></td>
+            <td class="tech-purpose">PostgreSQL driver — binary protocol, faster than psycopg2</td>
+          </tr>
+          <tr>
+            <td><div class="tech-name">pgvector</div><div class="tech-ver">0.4.1</div></td>
+            <td class="tech-purpose">1536-dim vector storage and cosine similarity search in Postgres</td>
+          </tr>
+          <tr>
+            <td><div class="tech-name">NumPy</div><div class="tech-ver">≥1.26.0</div></td>
+            <td class="tech-purpose">Cosine similarity computation for embedding-based ranking</td>
+          </tr>
+          <tr>
+            <td><div class="tech-name">httpx</div><div class="tech-ver">0.28.1</div></td>
+            <td class="tech-purpose">Async HTTP client for Google Places API calls</td>
+          </tr>
+          <tr>
+            <td><div class="tech-name">Alembic</div><div class="tech-ver">1.18.4</div></td>
+            <td class="tech-purpose">Database schema migrations with version control</td>
+          </tr>
+          <tr>
+            <td><div class="tech-name">PyJWT</div><div class="tech-ver">2.10.1</div></td>
+            <td class="tech-purpose">Stateless JWT authentication</td>
+          </tr>
+          <tr>
+            <td><div class="tech-name">slowapi</div><div class="tech-ver">0.1.9</div></td>
+            <td class="tech-purpose">Rate limiting middleware for FastAPI</td>
+          </tr>
+          <tr>
+            <td><div class="tech-name">Sentry SDK</div><div class="tech-ver">2.29.1</div></td>
+            <td class="tech-purpose">Error tracking with FastAPI + SQLAlchemy integrations, performance tracing</td>
+          </tr>
+          <tr>
+            <td><div class="tech-name">prometheus-fastapi-instrumentator</div><div class="tech-ver">—</div></td>
+            <td class="tech-purpose">7 custom AI metrics: LLM cost, latency, quality scores, cache hit rate, pipeline steps</td>
+          </tr>
+        </table>
+      </div>
+
+      <div style="background: var(--dark2); border: 1px solid var(--border); border-radius: 14px; overflow: hidden;">
+        <div style="padding: 16px 20px; border-bottom: 1px solid var(--border); font-size: 13px; font-weight: 700; color: var(--accent);">Frontend + Infrastructure</div>
+        <table class="tech-table">
+          <tr>
+            <td><div class="tech-name">React 19</div><div class="tech-ver">19.2.0</div></td>
+            <td class="tech-purpose">UI framework with hooks-based global workflow state</td>
+          </tr>
+          <tr>
+            <td><div class="tech-name">React Router</div><div class="tech-ver">7.13.1</div></td>
+            <td class="tech-purpose">Client-side routing with auth-gated protected routes</td>
+          </tr>
+          <tr>
+            <td><div class="tech-name">Vite</div><div class="tech-ver">7.3.1</div></td>
+            <td class="tech-purpose">Build tool with HMR and optimized production bundles</td>
+          </tr>
+          <tr>
+            <td><div class="tech-name">TailwindCSS</div><div class="tech-ver">latest</div></td>
+            <td class="tech-purpose">Utility-first styling, custom design system</td>
+          </tr>
+          <tr>
+            <td><div class="tech-name">Axios</div><div class="tech-ver">1.13.6</div></td>
+            <td class="tech-purpose">HTTP client with auth interceptors</td>
+          </tr>
+          <tr>
+            <td><div class="tech-name">Google Cloud Run</div><div class="tech-ver">—</div></td>
+            <td class="tech-purpose">Serverless container hosting for FastAPI backend</td>
+          </tr>
+          <tr>
+            <td><div class="tech-name">Firebase Hosting</div><div class="tech-ver">—</div></td>
+            <td class="tech-purpose">CDN-backed static hosting for React SPA</td>
+          </tr>
+          <tr>
+            <td><div class="tech-name">Supabase</div><div class="tech-ver">—</div></td>
+            <td class="tech-purpose">Managed PostgreSQL with connection pooler</td>
+          </tr>
+          <tr>
+            <td><div class="tech-name">Google Container Registry</div><div class="tech-ver">—</div></td>
+            <td class="tech-purpose">Docker image storage for Cloud Run deployments</td>
+          </tr>
+          <tr>
+            <td><div class="tech-name">Docker</div><div class="tech-ver">—</div></td>
+            <td class="tech-purpose">Containerized builds via Cloud Build + Cloud Run</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ DATABASE ══════════ -->
+<section class="section">
+  <div class="container">
+    <div class="section-label">Data Layer</div>
+    <h2 class="section-title">Database Schema</h2>
+    <p class="section-desc">PostgreSQL on Supabase with pgvector extension for semantic similarity search. JSON columns for flexible LLM output storage.</p>
+
+    <div class="grid-3">
+      <div class="card">
+        <div class="card-icon" style="background: rgba(56,189,248,.15);">👤</div>
+        <h3>users</h3>
+        <p>Email, hashed password, full name, created_at. JWT-based stateless auth. Email verification via pending_registrations table.</p>
+        <div class="tag-list"><span class="tag">JWT Auth</span><span class="tag">Email Verify</span></div>
+      </div>
+      <div class="card">
+        <div class="card-icon" style="background: rgba(52,211,153,.15);">📁</div>
+        <h3>projects</h3>
+        <p>Business profiles with name, description, address. One owner (FK to users), many sessions. Business address used for Google Places geocoding.</p>
+        <div class="tag-list"><span class="tag">1:N Sessions</span><span class="tag">Geocoding</span></div>
+      </div>
+      <div class="card">
+        <div class="card-icon" style="background: rgba(251,191,36,.15);">💬</div>
+        <h3>questionnaire_sessions</h3>
+        <p>Tracks interview state (pending → in_progress → completed). Stores full analysis_json after interview completion.</p>
+        <div class="tag-list"><span class="tag">State Machine</span><span class="tag">JSON Output</span></div>
+      </div>
+      <div class="card">
+        <div class="card-icon" style="background: rgba(199,40,50,.15);">📊</div>
+        <h3>analysis_reports</h3>
+        <p>Full competitive benchmarking output stored as TEXT (JSON). Contains SWOT, opportunity gaps, competitor profiles, market density.</p>
+        <div class="tag-list"><span class="tag">SWOT</span><span class="tag">Competitors</span></div>
+      </div>
+      <div class="card">
+        <div class="card-icon" style="background: rgba(167,139,250,.15);">🧠</div>
+        <h3>memory_chunks</h3>
+        <p>RAG embeddings table. Stores interview Q&A as text chunks with 1536-dimensional vectors (Vector type via pgvector). Enables semantic similarity search.</p>
+        <div class="tag-list"><span class="tag">pgvector</span><span class="tag">1536-dim</span><span class="tag">RAG</span></div>
+      </div>
+      <div class="card">
+        <div class="card-icon" style="background: rgba(251,146,60,.15);">🖼️</div>
+        <h3>media_assets</h3>
+        <p>Generated marketing content: type (social_post, logo, banner), storage_uri, metadata_json with tone/variant info. Images stored as base64 data URIs.</p>
+        <div class="tag-list"><span class="tag">DALL-E 3</span><span class="tag">base64</span><span class="tag">Multi-type</span></div>
+      </div>
+      <div class="card">
+        <div class="card-icon" style="background: rgba(52,211,153,.15);">⚡</div>
+        <h3>llm_cache</h3>
+        <p>DB-backed response cache with SHA-256 cache keys and 24-hour TTL. Eliminates redundant LLM calls for identical inputs — competitive analysis reuses results across users.</p>
+        <div class="tag-list"><span class="tag">SHA-256 Keys</span><span class="tag">TTL Invalidation</span><span class="tag">Cost Savings</span></div>
+      </div>
+      <div class="card">
+        <div class="card-icon" style="background: rgba(251,191,36,.15);">📈</div>
+        <h3>pipeline_runs</h3>
+        <p>Observability table recording every AI pipeline step: start/end time, duration_ms, status (success/error), and error message. Powers latency dashboards and SLA monitoring.</p>
+        <div class="tag-list"><span class="tag">Pipeline Tracing</span><span class="tag">Latency Tracking</span><span class="tag">SLA</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ AI SKILLS ══════════ -->
+<section class="section">
+  <div class="container">
+    <div class="section-label">Skills Demonstrated</div>
+    <h2 class="section-title">AI Engineer Skills in This Project</h2>
+    <p class="section-desc">Every skill is directly applied in production code — not theoretical. Here's where each one lives.</p>
+
+    <!-- LLM Engineering -->
+    <div style="margin-bottom: 40px;">
+      <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px;">
+        <div style="width: 36px; height: 36px; border-radius: 8px; background: rgba(199,40,50,.2); display: flex; align-items: center; justify-content: center; font-size: 18px;">🧠</div>
+        <div style="font-size: 1.1rem; font-weight: 700;">LLM Engineering</div>
+      </div>
+      <div class="grid-3">
+        <div class="card">
+          <h3>Prompt Engineering</h3>
+          <p>30+ structured prompts with role, context, constraints, output format, and max-length rules. Each prompt is domain-specific and tuned for JSON fidelity.</p>
+          <div class="tag-list"><span class="tag">System prompts</span><span class="tag">JSON mode</span><span class="tag">Token limits</span></div>
+        </div>
+        <div class="card">
+          <h3>Structured JSON Outputs</h3>
+          <p>All LLM responses parsed and validated against Pydantic schemas. Malformed or partial outputs caught and replaced with safe fallbacks — the frontend never receives broken state.</p>
+          <div class="tag-list"><span class="tag">Pydantic validation</span><span class="tag">Error recovery</span></div>
+        </div>
+        <div class="card">
+          <h3>Multi-Turn Chat</h3>
+          <p>Stateful conversation management for the adaptive interview and the Analysis Q&A copilot. Chat history windowed to last 6 messages to stay within context limits.</p>
+          <div class="tag-list"><span class="tag">Stateful chat</span><span class="tag">Context windowing</span></div>
+        </div>
+        <div class="card">
+          <h3>Context Window Management</h3>
+          <p>Compact prompt construction: competitor reviews truncated to 120 chars, reports summarized to ~800 tokens instead of 10k, memory snippets capped at 400 chars. 4× token reduction.</p>
+          <div class="tag-list"><span class="tag">Token optimization</span><span class="tag">Prompt compression</span></div>
+        </div>
+        <div class="card">
+          <h3>LLM Orchestration</h3>
+          <p>10 specialized agents chained in sequence. Output of each agent enriches the shared context object flowing into the next — a progressive intelligence pipeline.</p>
+          <div class="tag-list"><span class="tag">Agent chaining</span><span class="tag">Context passing</span></div>
+        </div>
+        <div class="card">
+          <h3>Graceful Degradation</h3>
+          <p>Every LLM feature has deterministic fallback heuristics. Keyword scoring, template personas, default questions. Zero hard dependency on OpenAI availability.</p>
+          <div class="tag-list"><span class="tag">Fallback heuristics</span><span class="tag">Rule-based scoring</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Embeddings & Semantic Search -->
+    <div style="margin-bottom: 40px;">
+      <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px;">
+        <div style="width: 36px; height: 36px; border-radius: 8px; background: rgba(56,189,248,.2); display: flex; align-items: center; justify-content: center; font-size: 18px;">📐</div>
+        <div style="font-size: 1.1rem; font-weight: 700;">Embeddings &amp; Semantic Search</div>
+      </div>
+      <div class="grid-3">
+        <div class="card">
+          <h3>Text Embeddings</h3>
+          <p>OpenAI <code>text-embedding-3-small</code> converts competitor profiles and business context into 1536-dimensional dense vectors for downstream ranking and retrieval.</p>
+          <div class="tag-list"><span class="tag">text-embedding-3-small</span><span class="tag">1536-dim vectors</span></div>
+        </div>
+        <div class="card">
+          <h3>Cosine Similarity</h3>
+          <p>NumPy dot-product cosine similarity ranks 20 discovered competitors against business context. Top 5 most semantically relevant are selected for expensive LLM enrichment.</p>
+          <div class="tag-list"><span class="tag">NumPy</span><span class="tag">Vector ranking</span></div>
+        </div>
+        <div class="card">
+          <h3>RAG (Retrieval-Augmented Generation)</h3>
+          <p>Interview Q&amp;A stored as vector chunks in pgvector. At query time, the top-K most relevant chunks are retrieved by cosine similarity and injected into the LLM prompt as grounding context.</p>
+          <div class="tag-list"><span class="tag">pgvector</span><span class="tag">Top-K retrieval</span><span class="tag">Grounded Q&A</span></div>
+        </div>
+        <div class="card">
+          <h3>Token Optimization via Embeddings</h3>
+          <p>Embed-then-rank strategy: use cheap embeddings (~$0.0001) to pre-filter candidates before invoking the expensive LLM. Eliminates timeouts and reduces cost 4×.</p>
+          <div class="tag-list"><span class="tag">Pre-filtering</span><span class="tag">Cost efficiency</span></div>
+        </div>
+        <div class="card">
+          <h3>Vector Database (pgvector)</h3>
+          <p>PostgreSQL <code>pgvector</code> extension stores and queries high-dimensional embeddings. SQLAlchemy connect event registers the psycopg v3 type adapter so Python lists serialize correctly to the <code>vector</code> column type.</p>
+          <div class="tag-list"><span class="tag">pgvector</span><span class="tag">psycopg v3</span><span class="tag">connect event</span></div>
+        </div>
+        <div class="card">
+          <h3>Semantic Deduplication</h3>
+          <p>Jaccard similarity on tokenized question text (stopwords removed) detects &gt;80% overlap and suppresses duplicate interview questions before they reach the user.</p>
+          <div class="tag-list"><span class="tag">Jaccard similarity</span><span class="tag">Tokenization</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Multimodal AI -->
+    <div style="margin-bottom: 40px;">
+      <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px;">
+        <div style="width: 36px; height: 36px; border-radius: 8px; background: rgba(167,139,250,.2); display: flex; align-items: center; justify-content: center; font-size: 18px;">🎨</div>
+        <div style="font-size: 1.1rem; font-weight: 700;">Multimodal AI</div>
+      </div>
+      <div class="grid-3">
+        <div class="card">
+          <h3>DALL-E 3 Image Generation</h3>
+          <p>Two-stage pipeline: GPT-4o-mini writes a detailed design brief + DALL-E prompt, then DALL-E 3 renders the image at 1024×1024. Returns <code>b64_json</code> for permanent storage (no expiring URLs).</p>
+          <div class="tag-list"><span class="tag">DALL-E 3</span><span class="tag">Two-stage prompting</span><span class="tag">base64 storage</span></div>
+        </div>
+        <div class="card">
+          <h3>Multi-format Content Generation</h3>
+          <p>Single pipeline generates 9 text asset types (social post, email, ad copy, press release…) and 4 visual types (logo, banner, poster, social visual) with 5 tone variants each.</p>
+          <div class="tag-list"><span class="tag">Text + Image</span><span class="tag">Tone variants</span><span class="tag">Multi-format</span></div>
+        </div>
+        <div class="card">
+          <h3>LLM-to-Image Prompting</h3>
+          <p>Rather than hard-coding DALL-E prompts, GPT-4o-mini dynamically generates the optimal visual prompt based on brand positioning, persona data, and requested asset type.</p>
+          <div class="tag-list"><span class="tag">Dynamic prompting</span><span class="tag">Brand-grounded</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Applied AI / Product Intelligence -->
+    <div style="margin-bottom: 40px;">
+      <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px;">
+        <div style="width: 36px; height: 36px; border-radius: 8px; background: rgba(251,191,36,.2); display: flex; align-items: center; justify-content: center; font-size: 18px;">📊</div>
+        <div style="font-size: 1.1rem; font-weight: 700;">Applied AI / Product Intelligence</div>
+      </div>
+      <div class="grid-3">
+        <div class="card">
+          <h3>TAM / SAM / SOM Estimation</h3>
+          <p>LLM-guided market sizing with geography-based multipliers, industry baselines, and interview-derived constraints. Outputs addressable market estimates grounded in real business context.</p>
+          <div class="tag-list"><span class="tag">Market sizing</span><span class="tag">LLM reasoning</span></div>
+        </div>
+        <div class="card">
+          <h3>CAC / LTV Unit Economics</h3>
+          <p>Estimated Customer Acquisition Cost (~$220 baseline, channel-adjusted) and Lifetime Value (~$1100 baseline) modeled from interview context — business-grade financial intelligence from a chat.</p>
+          <div class="tag-list"><span class="tag">Unit economics</span><span class="tag">Heuristic modeling</span></div>
+        </div>
+        <div class="card">
+          <h3>SWOT Generation</h3>
+          <p>Automated SWOT analysis derived from real competitor data, Google review sentiment, hours coverage gaps, and pricing notes. Not templated — grounded in live competitive intelligence.</p>
+          <div class="tag-list"><span class="tag">SWOT</span><span class="tag">Competitive data</span></div>
+        </div>
+        <div class="card">
+          <h3>Psychographic Segmentation</h3>
+          <p>3 buyer personas with psychographic profile, behavioral triggers, pain points, decision-making style, and channel preferences — mined from Google review language and interview signals.</p>
+          <div class="tag-list"><span class="tag">Personas</span><span class="tag">Review mining</span></div>
+        </div>
+        <div class="card">
+          <h3>Competitive Intelligence Pipeline</h3>
+          <p>End-to-end: keyword inference → geocoding → Places Nearby Search → embedding rank → Place Details → LLM enrichment → threat scoring. Real local competitor data, not synthetic.</p>
+          <div class="tag-list"><span class="tag">Google Places</span><span class="tag">Threat scoring</span><span class="tag">Multi-stage</span></div>
+        </div>
+        <div class="card">
+          <h3>NLP Keyword Scoring</h3>
+          <p>Positive/negative token weighting for heuristic 1–10 scoring of segment attractiveness, market structure, and product-market fit — deterministic NLP when LLM is unavailable.</p>
+          <div class="tag-list"><span class="tag">Token weighting</span><span class="tag">Heuristic NLP</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MLOps & Production AI -->
+    <div style="margin-bottom: 40px;">
+      <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px;">
+        <div style="width: 36px; height: 36px; border-radius: 8px; background: rgba(52,211,153,.2); display: flex; align-items: center; justify-content: center; font-size: 18px;">🔬</div>
+        <div style="font-size: 1.1rem; font-weight: 700;">MLOps &amp; Production AI Observability</div>
+      </div>
+      <div class="grid-3">
+        <div class="card">
+          <h3>LLM Observability</h3>
+          <p>Full instrumentation of every LLM call: token counts (input + output), estimated cost per call, latency measurement, and per-agent structured logs. Observable in Google Cloud Logging and Prometheus dashboards.</p>
+          <div class="tag-list"><span class="tag">Token tracking</span><span class="tag">Cost per call</span><span class="tag">Cloud Logging</span></div>
+        </div>
+        <div class="card">
+          <h3>LLM Output Evaluation</h3>
+          <p>Automated quality scoring (0.0–1.0) checks schema completeness after every LLM response. Per-agent custom scorers detect silent failures — missing required keys, empty lists, out-of-range numeric scores — before they propagate to the frontend.</p>
+          <div class="tag-list"><span class="tag">Quality gates</span><span class="tag">Schema eval</span><span class="tag">Silent failure detection</span></div>
+        </div>
+        <div class="card">
+          <h3>Prompt Optimization</h3>
+          <p>Per-agent token budgets enforced at runtime with <code>trim_str</code>/<code>trim_list</code> utilities. Token reduction via embedding pre-filtering (4× fewer tokens to LLM). Response caching eliminates redundant API calls entirely.</p>
+          <div class="tag-list"><span class="tag">Token budgets</span><span class="tag">Prompt compression</span><span class="tag">Cache-first pattern</span></div>
+        </div>
+        <div class="card">
+          <h3>RAG Evaluation</h3>
+          <p>Retrieval quality metrics computed after every semantic search: avg cosine similarity, min similarity, and low-relevance flag (threshold 0.75). Identifies when retrieved chunks are a poor match for the query before they reach the LLM prompt.</p>
+          <div class="tag-list"><span class="tag">Retrieval metrics</span><span class="tag">Cosine scoring</span><span class="tag">Quality threshold</span></div>
+        </div>
+        <div class="card">
+          <h3>AI Pipeline Tracing</h3>
+          <p>Context manager wraps every pipeline step, recording start/end timestamps, duration_ms, success/failure status, and error messages to the <code>pipeline_runs</code> table. Enables step-level SLA monitoring and P95 latency analysis.</p>
+          <div class="tag-list"><span class="tag">Step tracing</span><span class="tag">SLA monitoring</span><span class="tag">P95 latency</span></div>
+        </div>
+        <div class="card">
+          <h3>Parallel Execution</h3>
+          <p>ThreadPoolExecutor runs independent tasks concurrently — memory retrieval (embedding API call) runs in parallel with prompt assembly. Reduces wall-clock latency for user-facing endpoints without blocking the API thread.</p>
+          <div class="tag-list"><span class="tag">ThreadPoolExecutor</span><span class="tag">Concurrent futures</span><span class="tag">Latency reduction</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Skills Summary Bar -->
+    <div style="background: var(--dark2); border: 1px solid var(--border); border-radius: 14px; padding: 28px 32px;">
+      <div style="font-size: 13px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 16px;">Resume-Ready Skill Keywords</div>
+      <div class="tag-list" style="gap: 8px;">
+        <span class="badge badge-red">LLM Orchestration</span>
+        <span class="badge badge-red">Prompt Engineering</span>
+        <span class="badge badge-blue">RAG</span>
+        <span class="badge badge-blue">Vector Embeddings</span>
+        <span class="badge badge-blue">Cosine Similarity</span>
+        <span class="badge badge-blue">pgvector</span>
+        <span class="badge badge-green">Multi-Agent Systems</span>
+        <span class="badge badge-green">Agentic Pipelines</span>
+        <span class="badge badge-green">Graceful Degradation</span>
+        <span class="badge badge-purple">DALL-E 3</span>
+        <span class="badge badge-purple">Multimodal AI</span>
+        <span class="badge badge-purple">Two-stage Prompting</span>
+        <span class="badge badge-yellow">Structured JSON Outputs</span>
+        <span class="badge badge-yellow">Pydantic Validation</span>
+        <span class="badge badge-yellow">Context Window Management</span>
+        <span class="badge badge-orange">TAM/SAM/SOM</span>
+        <span class="badge badge-orange">CAC/LTV Modeling</span>
+        <span class="badge badge-orange">SWOT Generation</span>
+        <span class="badge badge-orange">Competitive Intelligence</span>
+        <span class="badge badge-red">Semantic Deduplication</span>
+        <span class="badge badge-blue">Psychographic Segmentation</span>
+        <span class="badge badge-green">NLP Keyword Scoring</span>
+        <span class="badge badge-red">LLM Observability</span>
+        <span class="badge badge-green">MLOps</span>
+        <span class="badge badge-blue">RAG Evaluation</span>
+        <span class="badge badge-purple">LLM Cost Optimization</span>
+        <span class="badge badge-yellow">Output Quality Scoring</span>
+        <span class="badge badge-orange">Pipeline Tracing</span>
+        <span class="badge badge-red">Prometheus Metrics</span>
+        <span class="badge badge-blue">Sentry APM</span>
+        <span class="badge badge-green">Response Caching</span>
+        <span class="badge badge-purple">Token Budget Enforcement</span>
+        <span class="badge badge-yellow">Parallel Execution</span>
+        <span class="badge badge-orange">Production AI Systems</span>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ══════════ INFRA ══════════ -->
+<section class="section">
+  <div class="container">
+    <div class="section-label">Deployment</div>
+    <h2 class="section-title">Cloud Infrastructure</h2>
+    <p class="section-desc">Fully containerized with CI/CD via Google Cloud Build. Zero-downtime deployments with Cloud Run's revision model.</p>
+
+    <div class="grid-3">
+      <div class="infra-card">
+        <h3>⚡ Backend — Cloud Run</h3>
+        <ul class="infra-list">
+          <li><span>✓</span><span>FastAPI container built with Cloud Build</span></li>
+          <li><span>✓</span><span>Image stored in Google Container Registry</span></li>
+          <li><span>✓</span><span>Auto-scales to zero on idle, instant cold start</span></li>
+          <li><span>✓</span><span>Env vars (API keys) injected at deploy time</span></li>
+          <li><span>✓</span><span>Region: us-central1</span></li>
+        </ul>
+      </div>
+      <div class="infra-card">
+        <h3>🌐 Frontend — Firebase Hosting</h3>
+        <ul class="infra-list">
+          <li><span>✓</span><span>React SPA deployed to Firebase CDN</span></li>
+          <li><span>✓</span><span>Global edge network for sub-50ms TTFB</span></li>
+          <li><span>✓</span><span>Custom routing rules for SPA fallback</span></li>
+          <li><span>✓</span><span>Nginx config for optimized caching headers</span></li>
+          <li><span>✓</span><span>HTTPS enforced by default</span></li>
+        </ul>
+      </div>
+      <div class="infra-card">
+        <h3>🗄️ Database — Supabase</h3>
+        <ul class="infra-list">
+          <li><span>✓</span><span>Managed PostgreSQL 15 with pgvector extension</span></li>
+          <li><span>✓</span><span>Connection pooler (PgBouncer) for Cloud Run</span></li>
+          <li><span>✓</span><span>Alembic migrations for schema versioning</span></li>
+          <li><span>✓</span><span>1536-dim vector index for semantic search</span></li>
+          <li><span>✓</span><span>Region: AWS us-west-2 (Supabase-managed)</span></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ FOOTER ══════════ -->
+<footer class="footer">
+  <div style="font-size: 1.5rem; font-weight: 800; margin-bottom: 8px;">MarketPilot AI</div>
+  <div style="color: var(--muted); margin-bottom: 16px;">Full-stack AI SaaS — Built end-to-end by Hemkush</div>
+  <div style="display: flex; gap: 24px; justify-content: center; flex-wrap: wrap; font-size: 13px;">
+    <span>Python · FastAPI · OpenAI · pgvector · React · Cloud Run · Firebase · Sentry · Prometheus · NumPy</span>
+  </div>
+</footer>
+
+</body>
+</html>

@@ -4,6 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.auth import get_current_user
+from app.core.pipeline_tracer import trace_step
+from app.core.response_cache import get_cached, make_cache_key, set_cached
 from app.db import get_db
 from app.models import (
     PositioningStatement,
@@ -40,7 +42,14 @@ def generate_positioning_contract(
         .filter(PositioningStatement.project_id == business_profile_id)
         .count()
     )
-    positioning_payload = generate_positioning(analysis_payload)
+    cache_key = make_cache_key("positioning_copilot", {
+        "analysis_report_id": analysis_report.id,
+    })
+    positioning_payload = get_cached(db, cache_key, ttl_hours=6)
+    if positioning_payload is None:
+        with trace_step(db, step="positioning_copilot", project_id=business_profile_id):
+            positioning_payload = generate_positioning(analysis_payload)
+        set_cached(db, cache_key, agent="positioning_copilot", payload=positioning_payload)
     row = PositioningStatement(
         project_id=business_profile_id,
         source_session_id=analysis_report.source_session_id,

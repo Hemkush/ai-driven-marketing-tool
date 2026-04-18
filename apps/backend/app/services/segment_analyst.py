@@ -1,4 +1,5 @@
 import json
+import logging
 from urllib.parse import urlparse
 from statistics import mean
 import re
@@ -6,6 +7,11 @@ import re
 from openai import OpenAI
 
 from app.core.config import settings
+from app.core.llm_tracker import tracked_responses
+from app.core.quality_scorer import score_segment_analysis
+from app.core.token_budget import trim_list, trim_str, get_budget
+
+logger = logging.getLogger(__name__)
 
 
 def _score_from_text(text: str, positive: list[str], negative: list[str]) -> int:
@@ -489,8 +495,10 @@ def analyze_segments(responses: list[dict], business_address: str | None = None)
             timeout=settings.openai_timeout_seconds,
             max_retries=settings.openai_max_retries,
         )
-        resp = client.responses.create(model=settings.openai_model, input=prompt)
+        resp = tracked_responses(client, agent="segment_analyst",
+            model=settings.openai_model, input=prompt)
         parsed = _extract_json(_response_to_text(resp)) or {}
+        score_segment_analysis(parsed)
         if "segment_attractiveness_analysis" not in parsed:
             report = _fallback_segment_analysis(responses, business_address=business_address)
             report["fallback_reason"] = "invalid_model_output"
@@ -676,27 +684,53 @@ def answer_analysis_question(
         if not text:
             continue
         topic = str(chunk.get("topic_tag", "")).strip()
-        memory_context.append({"topic": topic, "snippet": text[:500]})
+        memory_context.append({"topic": topic, "snippet": text[:400]})
+
+    # Compact the report instead of dumping the full JSON (~10k tokens).
+    # We only extract the fields actually needed to answer competitor/market questions.
+    competitors = analysis_report.get("competitors") or []
+    compact_competitors = []
+    for c in competitors[:8]:
+        ai = c.get("ai") if isinstance(c.get("ai"), dict) else {}
+        compact_competitors.append({
+            "name": c.get("name", ""),
+            "rating": c.get("rating"),
+            "price": c.get("price_label") or c.get("price_level"),
+            "threat": ai.get("competitive_threat_level"),
+            "how_they_compete": ai.get("how_they_compete"),
+            "services": (ai.get("services_offered") or [])[:4],
+            "review_summary": ai.get("review_summary", ""),
+        })
+    market_ai = analysis_report.get("market_overview") or {}
+    compact_report = {
+        "competitors": compact_competitors,
+        "opportunity_gaps": (market_ai.get("opportunity_gaps") or [])[:5],
+        "win_strategies": (market_ai.get("win_strategies") or [])[:5],
+        "market_density": market_ai.get("market_density"),
+        "swot_analysis": analysis_report.get("swot_analysis") or {},
+        "hours_gap_analysis": analysis_report.get("hours_gap_analysis") or {},
+    }
+
     prompt = (
         "You are CompetitiveBenchmarkingCopilot for a marketing strategy application.\n"
         "Answer user questions about the competitive benchmarking report clearly and concisely.\n"
         "The report contains real local competitor data fetched from Google Places, enriched with AI insights.\n"
-        "Your answer MUST be structured and readable with headings and bullet points.\n"
-        "Formatting rules for answer field:\n"
-        "- Use plain text with section headings followed by bullet points.\n"
-        "- If user asks for SWOT, use exactly these headings: Strengths, Weaknesses, Opportunities, Threats.\n"
-        "- Provide 3-5 bullets under each SWOT heading.\n"
-        "- Keep bullets concrete and tied to the competitor and market data in the report.\n"
+        "Formatting rules — follow these exactly:\n"
+        "- Use plain text section headings ending with ':' (e.g. 'Summary:') followed by bullet points.\n"
+        "- Each bullet must start with '- ' (hyphen space).\n"
+        "- If user asks for SWOT, use exactly: Strengths:, Weaknesses:, Opportunities:, Threats:\n"
+        "- Provide 3-5 bullets under each heading.\n"
         "- Reference specific competitor names, ratings, and price levels where relevant.\n"
-        "If user shares new facts that materially change their situation, recommend rerun.\n"
+        "- Do NOT use markdown symbols (no **, no ##, no _).\n"
+        "If user shares new facts that materially change their situation, set recommend_rerun to true.\n"
         "Return strict JSON only:\n"
         '{ "answer":"...", "recommend_rerun":true|false, "rerun_reason":"..." }\n\n'
         f"Business location: {business_address or ''}\n"
-        f"Competitive benchmarking report:\n{json.dumps(analysis_report, ensure_ascii=True)}\n"
-        f"Discovery responses:\n{json.dumps(transcript, ensure_ascii=True)}\n"
-        f"Retrieved memory snippets (high-relevance):\n{json.dumps(memory_context, ensure_ascii=True)}\n"
-        f"Recent chat history:\n{json.dumps(chat_history[-8:], ensure_ascii=True)}\n"
-        f"User question:\n{q}"
+        f"Competitive report:\n{trim_str(json.dumps(compact_report, ensure_ascii=True), max_tokens=get_budget('segment_analyst_chat'), label='compact_report')}\n"
+        f"Business interview context:\n{trim_str(json.dumps(transcript, ensure_ascii=True), max_tokens=600, label='transcript')}\n"
+        f"Relevant memory snippets:\n{json.dumps(trim_list(memory_context, max_tokens=get_budget('memory_context'), label='memory_context'), ensure_ascii=True)}\n"
+        f"Recent chat:\n{json.dumps(trim_list(chat_history[-6:], max_tokens=get_budget('chat_history'), label='chat_history'), ensure_ascii=True)}\n"
+        f"User question: {q}"
     )
     try:
         client = OpenAI(
@@ -705,7 +739,8 @@ def answer_analysis_question(
             timeout=max(20, settings.openai_timeout_seconds),
             max_retries=max(1, settings.openai_max_retries),
         )
-        resp = client.responses.create(model=settings.openai_model, input=prompt)
+        resp = tracked_responses(client, agent="segment_analyst_chat",
+            model=settings.openai_model, input=prompt)
         raw_text = _response_to_text(resp)
         parsed = _extract_json(raw_text) or {}
 

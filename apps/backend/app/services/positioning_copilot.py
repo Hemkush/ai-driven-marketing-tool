@@ -3,6 +3,8 @@ import json
 from openai import OpenAI
 
 from app.core.config import settings
+from app.core.llm_tracker import tracked_responses
+from app.core.quality_scorer import score_positioning
 
 
 def _extract_benchmarking_context(analysis_report: dict) -> dict:
@@ -140,7 +142,8 @@ def generate_positioning(
             timeout=20,
             max_retries=1,
         )
-        resp = client.responses.create(model=settings.openai_model, input=prompt)
+        resp = tracked_responses(client, agent="positioning_copilot",
+            model=settings.openai_model, input=prompt)
         raw = resp.output_text.strip()
         # Strip markdown code fences if present
         if raw.startswith("```"):
@@ -150,8 +153,8 @@ def generate_positioning(
         parsed = json.loads(raw.strip())
         if "positioning_statement" not in parsed:
             return _fallback_positioning(ctx, owner_feedback)
-        # Ensure tagline key always present
         parsed.setdefault("tagline", "")
+        score_positioning(parsed)
         return parsed
     except Exception:
         return _fallback_positioning(ctx, owner_feedback)

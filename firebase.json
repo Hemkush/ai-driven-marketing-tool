@@ -1,5 +1,6 @@
 {
   "hosting": {
+    "site": "ai-marketing-prod",
     "public": "apps/frontend/dist",
     "ignore": [
       "firebase.json",

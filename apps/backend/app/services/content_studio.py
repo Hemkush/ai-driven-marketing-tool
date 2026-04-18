@@ -1,9 +1,14 @@
 import json
+import logging
 from uuid import uuid4
 
 from openai import OpenAI
 
 from app.core.config import settings
+from app.core.llm_tracker import tracked_chat, tracked_image
+from app.core.quality_scorer import score_content
+
+logger = logging.getLogger(__name__)
 
 # ── Type classification ────────────────────────────────────────────────────────
 
@@ -172,7 +177,7 @@ def _generate_text_assets(
     results = []
     for _ in range(num_variants):
         try:
-            resp = client.chat.completions.create(
+            resp = tracked_chat(client, agent="content_studio",
                 model=settings.openai_model,
                 messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
                 response_format={"type": "json_object"},
@@ -224,7 +229,7 @@ def _generate_visual_assets(
         design_brief = {}
 
         try:
-            brief_resp = client.chat.completions.create(
+            brief_resp = tracked_chat(client, agent="content_studio_brief",
                 model=settings.openai_model,
                 messages=[{"role": "system", "content": brief_system}, {"role": "user", "content": brief_user}],
                 response_format={"type": "json_object"},
@@ -247,7 +252,7 @@ def _generate_visual_assets(
         dalle_error = None
         if dalle_prompt:
             try:
-                img_resp = client.images.generate(
+                img_resp = tracked_image(client, agent="content_studio",
                     model="dall-e-3",
                     prompt=dalle_prompt[:4000],
                     size="1024x1024",
@@ -301,8 +306,10 @@ def generate_content_assets(
 
     try:
         if _is_visual(normalized):
-            return _generate_visual_assets(client, project_name, strategy, normalized, prompt_text, tone, num_variants)
+            assets = _generate_visual_assets(client, project_name, strategy, normalized, prompt_text, tone, num_variants)
         else:
-            return _generate_text_assets(client, project_name, strategy, roadmap, normalized, prompt_text, tone, num_variants)
+            assets = _generate_text_assets(client, project_name, strategy, roadmap, normalized, prompt_text, tone, num_variants)
+        score_content(assets)
+        return assets
     except Exception:
         return _fallback_assets(project_name, normalized, prompt_text, num_variants)

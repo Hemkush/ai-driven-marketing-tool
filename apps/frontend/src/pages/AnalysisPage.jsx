@@ -32,8 +32,11 @@ function StructuredMessage({ text }) {
 
   const isBullet = (line) => /^([-*•]\s+|\d+[.)]\s+)/.test(line);
   const stripBullet = (line) => line.replace(/^([-*•]\s+|\d+[.)]\s+)/, "").trim();
+  const stripMarkdownHeading = (line) => line.replace(/^#{1,3}\s*/, "").trim();
+  const isMarkdownHeading = (line) => /^#{1,3}\s+/.test(line);
   const isHeading = (line, nextLine) => {
     if (!line) return false;
+    if (isMarkdownHeading(line)) return true;
     if (line.endsWith(":")) return true;
     if (isBullet(line)) return false;
     if (/^[A-Za-z][A-Za-z0-9 /&-]{2,70}$/.test(line) && nextLine)
@@ -51,12 +54,16 @@ function StructuredMessage({ text }) {
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const nextLine = lines[i + 1] || "";
+    // Check bullets first — a line starting with "- " is always a bullet, never a heading
+    if (isBullet(line)) { currentBlock.items.push(stripBullet(line)); continue; }
     if (isHeading(line, nextLine)) {
       pushCurrent();
-      currentBlock = { heading: line.replace(/:$/, "").trim(), items: [], paragraphs: [] };
+      const headingText = isMarkdownHeading(line)
+        ? stripMarkdownHeading(line)
+        : line.replace(/:$/, "").trim();
+      currentBlock = { heading: headingText, items: [], paragraphs: [] };
       continue;
     }
-    if (isBullet(line)) { currentBlock.items.push(stripBullet(line)); continue; }
     const sentences = line.split(/(?<=[.!?])\s+/).map((s) => s.trim()).filter(Boolean);
     if (sentences.length > 1 && !currentBlock.items.length)
       currentBlock.items.push(...sentences.map((s) => s.replace(/[.!?]$/, "")));
@@ -72,7 +79,9 @@ function StructuredMessage({ text }) {
           {b.heading && <p className="cb-structured-heading">{b.heading}</p>}
           {b.items.length > 0 && (
             <ul className="cb-structured-list">
-              {b.items.map((item, i) => <li key={i}>{item}</li>)}
+              {b.items.map((item, i) => (
+                <li key={i}><span className="cb-bullet-dot" aria-hidden="true">•</span>{item}</li>
+              ))}
             </ul>
           )}
           {b.paragraphs.map((p, i) => (

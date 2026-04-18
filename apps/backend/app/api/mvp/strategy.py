@@ -4,6 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.auth import get_current_user
+from app.core.pipeline_tracer import trace_step
+from app.core.response_cache import get_cached, make_cache_key, set_cached
 from app.db import get_db
 from app.models import (
     ChannelStrategy,
@@ -60,11 +62,19 @@ def generate_channel_strategy_contract(
         )
 
     personas = [json.loads(row.persona_json) for row in persona_rows]
-    strategy_payload = generate_channel_strategy(
-        project_name=project.name,
-        personas=personas,
-        research_report=json.loads(research_row.report_json),
-    )
+    cache_key = make_cache_key("channel_strategy_planner", {
+        "research_report_id": research_row.id,
+        "persona_ids": sorted([r.id for r in persona_rows]),
+    })
+    strategy_payload = get_cached(db, cache_key, ttl_hours=12)
+    if strategy_payload is None:
+        with trace_step(db, step="channel_strategy_planner", project_id=business_profile_id):
+            strategy_payload = generate_channel_strategy(
+                project_name=project.name,
+                personas=personas,
+                research_report=json.loads(research_row.report_json),
+            )
+        set_cached(db, cache_key, agent="channel_strategy_planner", payload=strategy_payload)
 
     row = ChannelStrategy(
         project_id=business_profile_id,
@@ -131,11 +141,19 @@ def generate_roadmap_contract(
         )
 
     personas = [json.loads(row.persona_json) for row in persona_rows]
-    roadmap_payload = generate_roadmap_plan(
-        project_name=project.name,
-        strategy=json.loads(strategy_row.strategy_json),
-        personas=personas,
-    )
+    cache_key = make_cache_key("roadmap_planner", {
+        "strategy_id": strategy_row.id,
+        "persona_ids": sorted([r.id for r in persona_rows]),
+    })
+    roadmap_payload = get_cached(db, cache_key, ttl_hours=12)
+    if roadmap_payload is None:
+        with trace_step(db, step="roadmap_planner", project_id=business_profile_id):
+            roadmap_payload = generate_roadmap_plan(
+                project_name=project.name,
+                strategy=json.loads(strategy_row.strategy_json),
+                personas=personas,
+            )
+        set_cached(db, cache_key, agent="roadmap_planner", payload=roadmap_payload)
 
     row = RoadmapPlan(
         project_id=business_profile_id,

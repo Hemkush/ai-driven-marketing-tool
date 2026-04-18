@@ -4,6 +4,8 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
 from app.core.auth import get_current_user
+from app.core.pipeline_tracer import trace_step
+from app.core.response_cache import get_cached, make_cache_key, set_cached
 from app.db import get_db
 from app.models import (
     PersonaProfile,
@@ -44,12 +46,22 @@ def generate_personas_contract(
     )
     positioning_payload = _safe_json_object(positioning_row.payload_json) if positioning_row else None
 
-    personas = generate_personas(
-        project_name=project.name,
-        analysis_report=json.loads(analysis_row.report_json),
-        positioning=positioning_payload,
-        num_personas=3,
-    )
+    cache_key = make_cache_key("persona_builder", {
+        "analysis_report_id": analysis_row.id,
+        "positioning_id": positioning_row.id if positioning_row else None,
+    })
+    cached_personas = get_cached(db, cache_key, ttl_hours=6)
+    if cached_personas is not None:
+        personas = cached_personas.get("personas", cached_personas) if isinstance(cached_personas, dict) else cached_personas
+    else:
+        with trace_step(db, step="persona_builder", project_id=business_profile_id):
+            personas = generate_personas(
+                project_name=project.name,
+                analysis_report=json.loads(analysis_row.report_json),
+                positioning=positioning_payload,
+                num_personas=3,
+            )
+        set_cached(db, cache_key, agent="persona_builder", payload={"personas": personas})
 
     created_rows = []
     source_session_id = analysis_row.source_session_id
