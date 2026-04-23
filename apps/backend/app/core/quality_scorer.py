@@ -222,16 +222,6 @@ def score_personas(personas: list) -> float:
     return round(sum(scores) / len(scores), 3)
 
 
-def score_channel_strategy(output: dict) -> float:
-    return score_output(
-        agent="channel_strategy_planner",
-        output=output,
-        required_keys=["project_name", "prioritized_channels"],
-        list_keys=["prioritized_channels"],
-        min_length=200,
-    )
-
-
 def score_roadmap(output: dict) -> float:
     return score_output(
         agent="roadmap_planner",

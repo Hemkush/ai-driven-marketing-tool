@@ -16,6 +16,7 @@ def _extract_context(analysis_report: dict, positioning: dict | None) -> dict:
     top_competitor_services = []
     review_snippets = []
     review_summaries = []
+    competitor_customer_segments = []
 
     for c in competitors[:6]:
         top_competitor_services.extend(c.get("services_offered") or [])
@@ -27,6 +28,12 @@ def _extract_context(analysis_report: dict, positioning: dict | None) -> dict:
         summary = (c.get("review_summary") or "").strip()
         if summary:
             review_summaries.append(f"{c.get('name', '')}: {summary}")
+        # Collect primary customer segments per competitor
+        segment = (c.get("primary_customer_segment") or "").strip()
+        if segment:
+            competitor_customer_segments.append(
+                f"{c.get('name', 'Competitor')}: {segment}"
+            )
 
     # Deduplicate services
     top_competitor_services = list(dict.fromkeys(top_competitor_services))[:10]
@@ -34,6 +41,7 @@ def _extract_context(analysis_report: dict, positioning: dict | None) -> dict:
     ctx = {
         "business_type": analysis_report.get("business_keyword", "local business"),
         "location": analysis_report.get("business_location", ""),
+        "geographical_range": analysis_report.get("geographical_range", ""),
         "market_density": market.get("market_density", "medium"),
         "opportunity_gaps": market.get("opportunity_gaps") or [],
         "competitor_services": top_competitor_services,
@@ -41,6 +49,7 @@ def _extract_context(analysis_report: dict, positioning: dict | None) -> dict:
         "swot_opportunities": swot.get("opportunities") or [],
         "customer_review_snippets": review_snippets[:10],
         "competitor_review_summaries": review_summaries[:6],
+        "competitor_customer_segments": competitor_customer_segments[:6],
     }
 
     if positioning:
@@ -83,6 +92,7 @@ def _fallback_personas(business_type: str, location: str) -> list[dict]:
                 "best_times_to_reach": "Evenings and weekends",
                 "key_messages_that_convert": f"Your trusted neighbourhood {btype} — consistent quality, every time.",
             },
+            "reasoning": f"Derived from common patterns for {btype} businesses in {loc}. Represents repeat, word-of-mouth driven customers typical for local service providers.",
         },
         {
             "name": "Trendy Newcomer Nadia",
@@ -112,6 +122,7 @@ def _fallback_personas(business_type: str, location: str) -> list[dict]:
                 "best_times_to_reach": "Lunch breaks and evenings",
                 "key_messages_that_convert": f"The {btype} everyone in {loc} is talking about.",
             },
+            "reasoning": f"Represents the social-discovery segment common for {btype} businesses in urban areas like {loc}. Identified from typical social media behaviour patterns for this business type.",
         },
         {
             "name": "Value-Seeker Victor",
@@ -141,6 +152,7 @@ def _fallback_personas(business_type: str, location: str) -> list[dict]:
                 "best_times_to_reach": "Early morning or lunch",
                 "key_messages_that_convert": f"Quality {btype} at a fair price — no surprises.",
             },
+            "reasoning": f"Represents the value-conscious segment typical for {btype} businesses. Identified based on common pricing sensitivity and efficiency priorities in local service markets.",
         },
     ]
 
@@ -182,7 +194,8 @@ def generate_personas(
         "  engagement_strategy: { preferred_channels (array), resonant_content_topics (array), best_times_to_reach, key_messages_that_convert }\n\n"
         f"Business type: {ctx['business_type']}\n"
         f"Location: {ctx['location']}\n"
-        f"Market density: {ctx['market_density']}\n"
+        + (f"Geographical reach: {ctx['geographical_range']}\n" if ctx.get('geographical_range') else "")
+        + f"Market density: {ctx['market_density']}\n"
         f"Market opportunity gaps: {', '.join(ctx['opportunity_gaps']) or 'none identified'}\n"
         f"SWOT strengths: {', '.join(ctx['swot_strengths']) or 'not available'}\n"
         f"SWOT opportunities: {', '.join(ctx['swot_opportunities']) or 'not available'}\n"
@@ -200,6 +213,13 @@ def generate_personas(
             + "\n\n"
             if ctx["competitor_review_summaries"] else ""
         )
+        + (
+            "Primary customer segments each competitor serves (use these to ensure your personas "
+            "are distinct from, or deliberately overlap with, the segments competitors are already capturing):\n"
+            + "\n".join(f"- {s}" for s in ctx["competitor_customer_segments"])
+            + "\n\n"
+            if ctx["competitor_customer_segments"] else ""
+        )
         + f"{pos_block}\n"
         "Rules:\n"
         "- Mine the real customer reviews for exact language, emotions, and recurring themes — "
@@ -210,6 +230,8 @@ def generate_personas(
         "- preferred_channels must be a JSON array of strings\n"
         "- resonant_content_topics must be a JSON array of strings\n"
         "- photo_prompt should describe a realistic stock photo for this persona type\n"
+        '- Each persona must include a "reasoning" field (1-2 sentences) citing which specific '
+        "market data points (gaps, reviews, competitor segments, location) shaped this persona.\n"
     )
 
     try:

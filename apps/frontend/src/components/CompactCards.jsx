@@ -279,6 +279,21 @@ export function CompetitorCards({ analysis }) {
               <p className="cb-comp-sub">
                 {competitors.length} local competitor{competitors.length !== 1 ? "s" : ""} analysed · sorted by threat level
               </p>
+              {analysis.geographical_range && (
+                <p className="cb-comp-range">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                    style={{ display: "inline", verticalAlign: "middle", marginRight: 4 }}>
+                    <circle cx="12" cy="12" r="10" />
+                    <circle cx="12" cy="12" r="4" />
+                    <line x1="12" y1="2" x2="12" y2="8" />
+                    <line x1="12" y1="16" x2="12" y2="22" />
+                    <line x1="2" y1="12" x2="8" y2="12" />
+                    <line x1="16" y1="12" x2="22" y2="12" />
+                  </svg>
+                  Search radius: {analysis.geographical_range}
+                </p>
+              )}
             </div>
             {topThreat && (
               <div className="cb-top-threat">
@@ -306,6 +321,30 @@ export function CompetitorCards({ analysis }) {
                       <span className="price-badge">{c.price_label || "N/A"}</span>
                     </div>
                   </div>
+
+                  {/* Primary customer segment */}
+                  {c.primary_customer_segment && (
+                    <div className="comp-segment-row">
+                      <span className="comp-segment-icon" aria-hidden="true">👥</span>
+                      <span className="comp-segment-text">{c.primary_customer_segment}</span>
+                      {c.primary_customer_segment_rationale && (
+                        <span className="comp-segment-info-wrap">
+                          <span className="comp-segment-info-icon" tabIndex={0} aria-label="Why this segment?">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                              stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <circle cx="12" cy="12" r="10" />
+                              <line x1="12" y1="16" x2="12" y2="12" />
+                              <line x1="12" y1="8" x2="12.01" y2="8" />
+                            </svg>
+                          </span>
+                          <span className="comp-segment-tooltip" role="tooltip">
+                            <strong>Why this segment?</strong>
+                            <span>{c.primary_customer_segment_rationale}</span>
+                          </span>
+                        </span>
+                      )}
+                    </div>
+                  )}
 
                   {/* Contact & location */}
                   <div className="competitor-contact">
@@ -1087,82 +1126,6 @@ export function ResearchCards({ research }) {
                 </svg>
                 {s.title || s.url}
               </a>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-export function StrategyCards({ strategy }) {
-  if (!strategy) return null;
-  const channels = strategy.prioritized_channels || [];
-  const keyMessages = strategy.key_messages || [];
-  const primary = channels[0];
-  const secondary = channels.slice(1);
-
-  return (
-    <div className="sc-wrap">
-      {/* Primary channel — hero card */}
-      {primary && (
-        <div className="sc-primary">
-          <div className="sc-primary-head">
-            <span className="sc-rank-badge sc-rank-primary">Primary Channel</span>
-            <h3 className="sc-primary-name">{primary.channel}</h3>
-          </div>
-          <p className="sc-primary-why">{primary.why}</p>
-          {(primary.weekly_actions || []).length > 0 && (
-            <div className="sc-actions-wrap">
-              <p className="sc-actions-label">Weekly Actions</p>
-              <ul className="sc-actions-list sc-actions-primary">
-                {primary.weekly_actions.map((a, i) => (
-                  <li key={i} className="sc-action-item">{a}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Secondary channels grid */}
-      {secondary.length > 0 && (
-        <div className="sc-secondary-grid">
-          {secondary.map((c, idx) => (
-            <div key={`${c.channel}-${idx}`} className="sc-channel-card">
-              <div className="sc-channel-head">
-                <span className="sc-rank-badge">#{c.priority || idx + 2}</span>
-                <h4 className="sc-channel-name">{c.channel}</h4>
-              </div>
-              <p className="sc-channel-why">{c.why}</p>
-              {(c.weekly_actions || []).length > 0 && (
-                <ul className="sc-actions-list">
-                  {c.weekly_actions.map((a, i) => (
-                    <li key={i} className="sc-action-item">{a}</li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Key messages */}
-      {keyMessages.length > 0 && (
-        <div className="sc-messages">
-          <p className="sc-messages-title">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"
-              style={{ display: "inline", marginRight: 6, verticalAlign: "middle" }}>
-              <path d="M12 2l2.09 6.26L20 10l-5.91 1.74L12 18l-2.09-6.26L4 10l5.91-1.74z" />
-            </svg>
-            Key Messages
-          </p>
-          <div className="sc-messages-list">
-            {keyMessages.map((m, i) => (
-              <div key={i} className="sc-message-item">
-                <span className="sc-message-q">&ldquo;</span>
-                <p className="sc-message-text">{m}</p>
-              </div>
             ))}
           </div>
         </div>

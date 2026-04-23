@@ -18,6 +18,10 @@ export default function QuestionnairePage({ workflow }) {
         analysis={state.interviewAnalysis}
         interviewCompleted={state.interviewCompleted}
       />
+      <p style={{ fontSize: "11px", color: "var(--text-secondary)", marginTop: "16px", lineHeight: 1.5 }}>
+        Your answers are used only to generate your personalised marketing strategy. No data is sold or shared with third parties.
+        AI-generated outputs are for guidance only — review before acting.
+      </p>
       {state.sessionId && (
         <NextStepCta to="/analysis" label="Next: Competitive Benchmarking" disabled={!state.interviewCompleted} />
       )}

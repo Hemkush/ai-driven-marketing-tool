@@ -1,6 +1,6 @@
 """
 Competitive Benchmarking Service
-Pipeline: Geocode → Google Places Nearby Search → Embedding Rank → Place Details (top 5) → OpenAI Enrichment
+Pipeline: Geocode → Google Places Nearby Search (geo-range aware) → Embedding Rank → Place Details (top 10) → OpenAI Enrichment
 """
 import json
 import logging
@@ -21,6 +21,26 @@ NEARBY_SEARCH_URL = "https://maps.googleapis.com/maps/api/place/nearbysearch/jso
 PLACE_DETAILS_URL = "https://maps.googleapis.com/maps/api/place/details/json"
 
 PRICE_LEVEL_LABELS = {0: "Free", 1: "$", 2: "$$", 3: "$$$", 4: "$$$$"}
+
+_MILES_TO_METERS = 1609.34
+_KM_TO_METERS = 1000.0
+
+
+def _parse_range_to_meters(geographical_range: str | None, default_meters: int) -> int:
+    """Convert a free-text geographical range (e.g. '5 miles', '10 km') to metres.
+    Returns default_meters when nothing parseable is found."""
+    import re
+    if not geographical_range:
+        return default_meters
+    text = geographical_range.lower()
+    # Match patterns like "5 miles", "5-mile", "10km", "10 kilometers"
+    m = re.search(r"(\d+(?:\.\d+)?)\s*(?:mile|mi\b)", text)
+    if m:
+        return max(500, int(float(m.group(1)) * _MILES_TO_METERS))
+    m = re.search(r"(\d+(?:\.\d+)?)\s*(?:kilometer|kilometre|km\b)", text)
+    if m:
+        return max(500, int(float(m.group(1)) * _KM_TO_METERS))
+    return default_meters
 
 PLACE_DETAIL_FIELDS = (
     "name,formatted_address,formatted_phone_number,website,"
@@ -343,9 +363,9 @@ def _enrich_with_ai(
     if not settings.can_use_openai() or not competitors:
         return {}
 
-    # Build compact summaries for the prompt — cap at 8 competitors to keep prompt size manageable
+    # Build compact summaries for the prompt — cap at 10 competitors to keep prompt size manageable
     summaries = []
-    for c in competitors[:8]:
+    for c in competitors[:10]:
         reviews = [r.get("text", "")[:120] for r in (c.get("reviews") or []) if r.get("text")]
         editorial = c.get("editorial_summary") or {}
         editorial_text = (
@@ -385,7 +405,9 @@ def _enrich_with_ai(
         '      "pricing_notes": "Estimated price range and pricing strategy",\n'
         '      "competitive_threat_level": "high | medium | low",\n'
         '      "how_they_compete": "Brief strategic summary of their competitive position",\n'
-        '      "review_summary": "What customers love and what they complain about"\n'
+        '      "review_summary": "What customers love and what they complain about",\n'
+        '      "primary_customer_segment": "Who this business most frequently serves — be specific (e.g. \'Families with young children\', \'Budget-conscious young professionals aged 20-35\', \'Affluent women aged 40-60\')",\n'
+        '      "primary_customer_segment_rationale": "2-3 specific factors from the data that led to this conclusion (e.g. price level, review language, services offered, location type)"\n'
         "    }\n"
         "  ],\n"
         '  "market_overview": {\n'
@@ -454,6 +476,7 @@ def _fallback_benchmarking(business_address: str, reason: str) -> dict:
         "report_type": "competitive_benchmarking",
         "analysis_source": "fallback",
         "business_location": business_address,
+        "geographical_range": "",
         "competitors": [],
         "market_overview": {
             "total_competitors_found": 0,
@@ -478,6 +501,7 @@ def _fallback_benchmarking(business_address: str, reason: str) -> dict:
 def run_competitive_benchmarking(
     responses: list[dict],
     business_address: str | None = None,
+    geographical_range: str | None = None,
     conversation_analysis: dict | None = None,
 ) -> dict:
     """
@@ -502,16 +526,19 @@ def run_competitive_benchmarking(
     coords, geo_status = _geocode_address(business_address or "") if business_address else (None, "no_address")
     diagnostics["geocode_status"] = geo_status
 
+    search_radius = _parse_range_to_meters(geographical_range, settings.benchmarking_radius_meters)
+    diagnostics["search_radius_meters"] = search_radius
+
     if coords:
         lat, lng = coords
         raw_places, nearby_status = _fetch_nearby_competitors(
-            lat, lng, business_keyword, settings.benchmarking_radius_meters
+            lat, lng, business_keyword, search_radius
         )
         diagnostics["nearby_status"] = nearby_status
         # Broaden if nothing found
         if not raw_places:
             raw_places, nearby_status2 = _fetch_nearby_competitors(
-                lat, lng, "business", settings.benchmarking_radius_meters * 2
+                lat, lng, "business", search_radius * 2
             )
             diagnostics["nearby_fallback_status"] = nearby_status2
 
@@ -524,19 +551,19 @@ def run_competitive_benchmarking(
 
     # Sort by rating descending as a baseline before embedding ranking
     raw_places.sort(key=lambda x: float(x.get("rating") or 0), reverse=True)
-    raw_places = raw_places[:20]  # keep up to 20 candidates for embedding to rank
+    raw_places = raw_places[:30]  # keep up to 30 candidates for embedding to rank
 
-    # --- Embedding-based ranking: pick the 5 most relevant competitors cheaply ---
+    # --- Embedding-based ranking: pick the 10 most relevant competitors cheaply ---
     # We embed basic place data (name + types + vicinity) vs the business context.
     # This costs ~$0.0001 and avoids fetching Place Details for irrelevant places,
     # which in turn keeps the final LLM prompt small and fast.
     interview_context = _build_interview_context(responses)
     business_context = f"{business_keyword} in {business_address or 'local area'}. {interview_context[:400]}"
-    top_places = _rank_by_relevance(raw_places, business_context, top_n=5)
+    top_places = _rank_by_relevance(raw_places, business_context, top_n=10)
     diagnostics["places_after_embedding_rank"] = len(top_places)
     logger.info("Embedding ranking reduced %d candidates to %d", len(raw_places), len(top_places))
 
-    # Fetch Place Details only for the top 5 (saves Google Places API quota too)
+    # Fetch Place Details only for the top 10 (saves Google Places API quota too)
     detailed: list[dict] = []
     for place in top_places:
         place_id = place.get("place_id", "")
@@ -612,6 +639,8 @@ def run_competitive_benchmarking(
             "competitive_threat_level": ai.get("competitive_threat_level", "medium"),
             "how_they_compete": ai.get("how_they_compete", ""),
             "review_summary": ai.get("review_summary", ""),
+            "primary_customer_segment": ai.get("primary_customer_segment", ""),
+            "primary_customer_segment_rationale": ai.get("primary_customer_segment_rationale", ""),
         })
 
     # Sort: threat level first, then rating
@@ -626,6 +655,7 @@ def run_competitive_benchmarking(
         "report_type": "competitive_benchmarking",
         "analysis_source": "hybrid" if final_competitors else "ai_only",
         "business_location": business_address or "",
+        "geographical_range": geographical_range or "",
         "business_keyword": business_keyword,
         "competitors": final_competitors,
         "market_overview": {

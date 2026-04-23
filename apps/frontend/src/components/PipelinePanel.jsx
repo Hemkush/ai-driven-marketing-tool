@@ -16,8 +16,6 @@ export default function PipelinePanel({
   research,
   generatePersonas,
   personas,
-  generateStrategy,
-  strategy,
   generateRoadmap,
   roadmap,
   assetType,
@@ -68,13 +66,7 @@ export default function PipelinePanel({
       </button>
       {personas.length > 0 && <pre>{pretty(personas)}</pre>}
 
-      <h3>Step 6 - Strategy</h3>
-      <button onClick={generateStrategy} disabled={busy || !activeProjectId}>
-        Generate Strategy
-      </button>
-      {strategy && <pre>{pretty(strategy)}</pre>}
-
-      <h3>Step 7 - Roadmap</h3>
+      <h3>Step 6 - Roadmap</h3>
       <button onClick={generateRoadmap} disabled={busy || !activeProjectId}>
         Generate Roadmap
       </button>

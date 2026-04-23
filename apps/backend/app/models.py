@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import String, Text, DateTime, func, ForeignKey, Integer
+from sqlalchemy import Boolean, Float, SmallInteger, String, Text, DateTime, func, ForeignKey, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db import Base
 
@@ -85,7 +85,9 @@ class Project(Base):
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     business_address: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    geographical_range: Mapped[str | None] = mapped_column(String(500), nullable=True)
     owner_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    consent_given: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
     created_at: Mapped[DateTime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -101,9 +103,6 @@ class Project(Base):
     )
     research_reports: Mapped[list[ResearchReport]] = relationship(back_populates="project")
     personas: Mapped[list[PersonaProfile]] = relationship(back_populates="project")
-    channel_strategies: Mapped[list[ChannelStrategy]] = relationship(
-        back_populates="project"
-    )
     roadmap_plans: Mapped[list[RoadmapPlan]] = relationship(back_populates="project")
     media_assets: Mapped[list[MediaAsset]] = relationship(back_populates="project")
 
@@ -197,6 +196,7 @@ class AnalysisReport(Base):
     )
     status: Mapped[str] = mapped_column(String(40), default="queued", nullable=False)
     report_json: Mapped[str] = mapped_column(Text, nullable=False)
+    quality_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_at: Mapped[DateTime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -219,6 +219,7 @@ class PositioningStatement(Base):
     statement_text: Mapped[str] = mapped_column(Text, nullable=False)
     rationale: Mapped[str] = mapped_column(Text, default="", nullable=False)
     payload_json: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
+    quality_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_at: Mapped[DateTime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -236,6 +237,7 @@ class ResearchReport(Base):
     )
     status: Mapped[str] = mapped_column(String(40), default="queued", nullable=False)
     report_json: Mapped[str] = mapped_column(Text, nullable=False)
+    quality_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_at: Mapped[DateTime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -253,27 +255,13 @@ class PersonaProfile(Base):
     )
     persona_name: Mapped[str] = mapped_column(String(160), nullable=False)
     persona_json: Mapped[str] = mapped_column(Text, nullable=False)
+    quality_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_at: Mapped[DateTime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
     project: Mapped[Project] = relationship(back_populates="personas")
 
-
-class ChannelStrategy(Base):
-    __tablename__ = "channel_strategies"
-
-    id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), nullable=False, index=True)
-    source_session_id: Mapped[int | None] = mapped_column(
-        ForeignKey("questionnaire_sessions.id"), nullable=True, index=True
-    )
-    strategy_json: Mapped[str] = mapped_column(Text, nullable=False)
-    created_at: Mapped[DateTime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
-
-    project: Mapped[Project] = relationship(back_populates="channel_strategies")
 
 
 class RoadmapPlan(Base):
@@ -285,6 +273,7 @@ class RoadmapPlan(Base):
         ForeignKey("questionnaire_sessions.id"), nullable=True, index=True
     )
     plan_json: Mapped[str] = mapped_column(Text, nullable=False)
+    quality_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_at: Mapped[DateTime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -305,8 +294,22 @@ class MediaAsset(Base):
     prompt_text: Mapped[str] = mapped_column(Text, default="", nullable=False)
     metadata_json: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
     status: Mapped[str] = mapped_column(String(40), default="created", nullable=False)
+    quality_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_at: Mapped[DateTime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
     project: Mapped[Project] = relationship(back_populates="media_assets")
+
+
+class OutputFeedback(Base):
+    __tablename__ = "output_feedback"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    project_id: Mapped[int | None] = mapped_column(ForeignKey("projects.id"), nullable=True, index=True)
+    agent: Mapped[str] = mapped_column(String(50), nullable=False)
+    quality_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    polarity: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    created_at: Mapped[DateTime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )

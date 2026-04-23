@@ -399,7 +399,7 @@ function LpHero({ onOpenAuth }) {
         <div className="lp-hero-content">
           <div className="lp-badge">AI Marketing Strategy · Powered by Real Google Data</div>
           <h1 className="lp-hero-h1">
-            Know exactly how to beat every{" "}
+            See exactly where you stand against every{" "}
             <span className="lp-hero-highlight">competitor in your area.</span>
           </h1>
           <p className="lp-hero-sub">

@@ -230,8 +230,11 @@ export default function QuestionnaireChatPanel({
                 <span className={`chip ${analysis.confidence === "high" ? "accepted" : analysis.confidence === "medium" ? "manual" : "rejected"}`}>
                   {analysis.confidence} confidence
                 </span>
-                {analysis.business_location && (
+                {analysis.business_location && analysis.business_location !== "Not provided" && (
                   <span className="qp-analysis-loc">📍 {analysis.business_location}</span>
+                )}
+                {analysis.geographical_range && analysis.geographical_range !== "Not provided" && (
+                  <span className="qp-analysis-loc qp-analysis-range">🗺 {analysis.geographical_range}</span>
                 )}
               </div>
 
@@ -302,6 +305,36 @@ export default function QuestionnaireChatPanel({
               </div>
             )}
           </div>
+
+          {/* Hint banner — pinned above composer, visible without scrolling */}
+          {answeredCount >= 3 && !interviewCompleted && (
+            <div className="qp-hint-banner">
+              <div className="qp-hint-row qp-hint-ready">
+                <span className="qp-hint-icon">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                </span>
+                <span>
+                  <strong>{answeredCount} questions answered</strong> — you can complete the interview now.
+                  Click <strong>Complete Interview →</strong> in the top-right to move to the next step.
+                </span>
+              </div>
+              <div className="qp-hint-row qp-hint-more">
+                <span className="qp-hint-icon">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+                  </svg>
+                </span>
+                <span>
+                  Keep answering for <strong>richer, more tailored</strong> results —
+                  more context helps MarketPilot build a sharper strategy for your business.
+                </span>
+              </div>
+            </div>
+          )}
 
           {interviewCompleted ? (
             <div className="qp-composer-done">

@@ -44,9 +44,10 @@ export function useMvpWorkflow() {
   const [positioningFeedback, setPositioningFeedback] = useState("");
   const [research, setResearch] = useState(null);
   const [personas, setPersonas] = useState([]);
-  const [strategy, setStrategy] = useState(null);
   const [roadmap, setRoadmap] = useState(null);
   const [contentAssets, setContentAssets] = useState([]);
+  const [prefetch, setPrefetch] = useState({ positioning: false, personas: false });
+  const [gateError, setGateError] = useState(null);
   const [assetType, setAssetType] = useState("social_post");
   const [assetPrompt, setAssetPrompt] = useState("Create premium launch-week content.");
   const [numVariants, setNumVariants] = useState(3);
@@ -94,14 +95,30 @@ export function useMvpWorkflow() {
     setToasts((prev) => [toast, ...prev].slice(0, 4));
   }, [msg]);
 
+  const _bgFetch = (key, fn) => {
+    setPrefetch((p) => ({ ...p, [key]: true }));
+    fn()
+      .catch(() => {})
+      .finally(() => setPrefetch((p) => ({ ...p, [key]: false })));
+  };
+
   const run = async (fn, loadingMsg = "Working...") => {
     setBusy(true);
+    setGateError(null);
     setMsg(loadingMsg);
     try {
       const result = await fn();
       return { ok: true, result };
     } catch (e) {
-      setMsg(e?.response?.data?.detail || e?.message || "Request failed");
+      const detail = e?.response?.data?.detail;
+      if (detail?.code === "incomplete_profile") {
+        setGateError(detail);
+        setMsg("Add more detail to your questionnaire to generate reliable output.");
+      } else {
+        setMsg(
+          typeof detail === "string" ? detail : e?.message || "Request failed"
+        );
+      }
       return { ok: false, result: null };
     } finally {
       setBusy(false);
@@ -121,11 +138,13 @@ export function useMvpWorkflow() {
   // Called after loadProjectSessions / selectProjectSession so every page
   // sees correct data immediately after login or session switch.
   const _applySnapshot = (snap) => {
-    setAnalysis(snap?.analysis?.report ?? null);
-    setResearch(snap?.research?.report ?? null);
+    const analysisSnap = snap?.analysis;
+    setAnalysis(analysisSnap ? { ...analysisSnap.report, quality_score: analysisSnap.quality_score } : null);
+    const researchSnap = snap?.research;
+    setResearch(researchSnap ? { ...researchSnap.report, quality_score: researchSnap.quality_score } : null);
     setPersonas(snap?.personas ?? []);
-    setStrategy(snap?.strategy?.strategy ?? null);
-    setRoadmap(snap?.roadmap?.roadmap ?? null);
+    const roadmapSnap = snap?.roadmap;
+    setRoadmap(roadmapSnap ? { ...roadmapSnap.roadmap, quality_score: roadmapSnap.quality_score } : null);
     const pos = snap?.positioning ?? null;
     setPositioning(pos);
     setPositioningHistory(pos ? [pos] : []);
@@ -206,10 +225,10 @@ export function useMvpWorkflow() {
       setPositioningHistory([]);
       setResearch(null);
       setPersonas([]);
-      setStrategy(null);
       setRoadmap(null);
       setContentAssets([]);
       setAssetTone("professional");
+      setPrefetch({ positioning: false, personas: false });
       setMsg("Logged out.");
     },
 
@@ -268,9 +287,9 @@ export function useMvpWorkflow() {
         setPositioningHistory([]);
         setResearch(null);
         setPersonas([]);
-        setStrategy(null);
         setRoadmap(null);
         setContentAssets([]);
+        setPrefetch({ positioning: false, personas: false });
 
         const data = await questionnaireClient.chatStart(Number(activeProjectId));
         setSessionId(data.session_id);
@@ -382,6 +401,7 @@ export function useMvpWorkflow() {
           setSelectedProjectSessionDetail(null);
           setSelectedProjectSessionWorkflow(null);
           setInterviewStatus("idle");
+          setSessionId(null);
           setChatMessages([]);
           setInterviewCoverage(null);
           setInterviewAnalysis(null);
@@ -459,22 +479,33 @@ export function useMvpWorkflow() {
 
     runAnalysis: async () =>
       run(async () => {
+        const projectId = Number(activeProjectId);
         const assistantContext = analysisAssistantMessages
           .filter((m) => m.role === "user")
           .map((m) => m.content?.trim())
           .filter(Boolean)
           .slice(-6)
           .join("\n");
-        const data = await pipelineClient.runAnalysis(
-          Number(activeProjectId),
-          assistantContext
-        );
-        setAnalysis(data.report);
+        const data = await pipelineClient.runAnalysis(projectId, assistantContext);
+        setAnalysis({ ...data.report, quality_score: data.quality_score });
         await refreshSelectedSessionWorkflow();
         setMsg(
           assistantContext
             ? "Analysis regenerated using discovery responses and assistant context."
             : "Analysis generated."
+        );
+
+        // Background-prefetch positioning + personas so those pages feel instant
+        _bgFetch("positioning", () =>
+          pipelineClient.generatePositioning(projectId).then((d) => {
+            setPositioning(d.positioning);
+            setPositioningHistory((prev) => [d.positioning, ...prev]);
+          })
+        );
+        _bgFetch("personas", () =>
+          pipelineClient.generatePersonas(projectId).then((d) => {
+            setPersonas(d.personas || []);
+          })
         );
       }, "Generating analysis..."),
 
@@ -566,7 +597,7 @@ export function useMvpWorkflow() {
     runResearch: async () =>
       run(async () => {
         const data = await pipelineClient.runResearch(Number(activeProjectId));
-        setResearch(data.report);
+        setResearch({ ...data.report, quality_score: data.quality_score });
         await refreshSelectedSessionWorkflow();
         setMsg("Research generated.");
       }, "Generating research..."),
@@ -579,18 +610,10 @@ export function useMvpWorkflow() {
         setMsg("Personas generated.");
       }, "Generating personas..."),
 
-    generateStrategy: async () =>
-      run(async () => {
-        const data = await pipelineClient.generateStrategy(Number(activeProjectId));
-        setStrategy(data.strategy);
-        await refreshSelectedSessionWorkflow();
-        setMsg("Channel strategy generated.");
-      }, "Generating strategy..."),
-
     generateRoadmap: async () =>
       run(async () => {
         const data = await pipelineClient.generateRoadmap(Number(activeProjectId));
-        setRoadmap(data.roadmap);
+        setRoadmap({ ...data.roadmap, quality_score: data.quality_score });
         await refreshSelectedSessionWorkflow();
         setMsg("Roadmap generated.");
       }, "Generating roadmap..."),
@@ -637,9 +660,9 @@ export function useMvpWorkflow() {
       setPositioningHistory([]);
       setResearch(null);
       setPersonas([]);
-      setStrategy(null);
       setRoadmap(null);
       setContentAssets([]);
+      setPrefetch({ positioning: false, personas: false });
     },
   };
 
@@ -679,9 +702,10 @@ export function useMvpWorkflow() {
       positioningFeedback,
       research,
       personas,
-      strategy,
       roadmap,
       contentAssets,
+      prefetch,
+      gateError,
       assetType,
       assetPrompt,
       numVariants,

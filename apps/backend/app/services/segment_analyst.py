@@ -443,6 +443,11 @@ def _fallback_segment_analysis(responses: list[dict], business_address: str | No
             ),
             "verification_level": "internal_only",
         },
+        "reasoning": (
+            "Analysis generated from your questionnaire responses using heuristic rules. "
+            "Segment scores and market sizing are directional estimates based on your business "
+            "type and location context."
+        ),
     }
 
 
@@ -484,6 +489,8 @@ def analyze_segments(responses: list[dict], business_address: str | None = None)
         "- sources must be 3-10 items with keys: title, url, publisher, published_at, used_for(list), note.\n"
         "- Include only links you can provide explicitly. If unavailable, use internal:// URLs and explain in note.\n"
         "- source_transparency must include external_sources_used(bool), note, verification_level.\n"
+        '- Include a top-level "reasoning" field (2-3 sentences) citing which specific user inputs '
+        "drove the key segment and market conclusions. Reference actual details from the transcript.\n"
         f"Business address/location context:\n{business_address or ''}\n"
         f"Transcript:\n{json.dumps(transcript, ensure_ascii=True)}"
     )

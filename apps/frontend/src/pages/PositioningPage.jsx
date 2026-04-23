@@ -1,10 +1,16 @@
 import { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { NextStepCta } from "../components/UiBlocks";
 import { PositioningCard } from "../components/CompactCards";
 import { LoadingSkeleton } from "../components/LoadingSkeleton";
+import { TrustBadge } from "../components/TrustBadge";
+import { WhyThis } from "../components/WhyThis";
+import { AiChip } from "../components/AiChip";
+import { FeedbackThumbs } from "../components/FeedbackThumbs";
 
 export default function PositioningPage({ workflow }) {
   const { state, set, actions } = workflow;
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (!state.activeProjectId) return;
@@ -15,70 +21,8 @@ export default function PositioningPage({ workflow }) {
   const hasHistory = state.positioningHistory?.length > 0;
   const latest = state.positioningHistory?.[0];
   const olderVersions = state.positioningHistory?.slice(1) || [];
+  const isPrefetching = !hasHistory && state.prefetch?.positioning;
 
-  /* ── Gate / empty state ───────────────────────────────────────────────── */
-  if (!state.busy && !hasHistory) {
-    return (
-      <div className="psp-page">
-        <div className="psp-gate">
-          <div className="psp-gate-icon" aria-hidden="true">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none"
-              stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10" />
-              <circle cx="12" cy="12" r="6" />
-              <circle cx="12" cy="12" r="2" />
-            </svg>
-          </div>
-          <h2 className="psp-gate-title">No Positioning Draft Yet</h2>
-          <p className="psp-gate-sub">
-            The AI crafts your unique market position by synthesising your discovery interview and
-            competitive benchmarking data — make sure both steps are complete for the best result.
-          </p>
-          <div className="psp-gate-steps">
-            <div className="psp-gate-step">
-              <span className={`psp-step-badge${state.interviewCompleted ? " psp-step-done" : ""}`}>
-                {state.interviewCompleted ? "✓" : "1"}
-              </span>
-              <div className="psp-step-body">
-                <p className="psp-step-title">Discovery Interview</p>
-                <p className="psp-step-sub">
-                  {state.interviewCompleted ? "Complete" : "Answer all interview questions and click Complete Interview"}
-                </p>
-              </div>
-            </div>
-            <div className="psp-gate-step">
-              <span className={`psp-step-badge${state.analysis ? " psp-step-done" : ""}`}>
-                {state.analysis ? "✓" : "2"}
-              </span>
-              <div className="psp-step-body">
-                <p className="psp-step-title">Competitive Benchmarking</p>
-                <p className="psp-step-sub">
-                  {state.analysis ? "Complete" : "Run the competitor analysis from the Benchmarking page"}
-                </p>
-              </div>
-            </div>
-            <div className="psp-gate-step">
-              <span className="psp-step-badge">3</span>
-              <div className="psp-step-body">
-                <p className="psp-step-title">Generate Positioning</p>
-                <p className="psp-step-sub">Click the button below — AI generates in ~20 seconds</p>
-              </div>
-            </div>
-          </div>
-          <button
-            className="btn psp-gate-cta"
-            onClick={actions.generatePositioning}
-            disabled={state.busy || !state.activeProjectId}
-          >
-            Generate Positioning →
-          </button>
-        </div>
-        <NextStepCta to="/personas" label="Next: Personas" disabled={true} />
-      </div>
-    );
-  }
-
-  /* ── Main page ────────────────────────────────────────────────────────── */
   return (
     <div className="psp-page">
       {/* Page header */}
@@ -93,21 +37,38 @@ export default function PositioningPage({ workflow }) {
         <button
           className="btn"
           onClick={actions.generatePositioning}
-          disabled={state.busy || !state.activeProjectId}
+          disabled={state.busy || isPrefetching || !state.activeProjectId}
         >
           {hasHistory ? "Regenerate Positioning" : "Generate Positioning"}
         </button>
       </div>
 
-      {/* Loading */}
+      {/* Background prefetch in progress */}
+      {isPrefetching && !state.busy && (
+        <LoadingSkeleton lines={5} message="Preparing your positioning statement…" />
+      )}
+
+      {/* Manual generate loading */}
       {state.busy && (
         <LoadingSkeleton lines={5} message="Generating your positioning statement…" />
       )}
 
+      {/* Gate error */}
+      {state.gateError?.agent === "positioning_copilot" && (
+        <div style={{ background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: "8px", padding: "14px 16px", marginBottom: "16px" }}>
+          <p style={{ margin: 0, fontSize: "14px", color: "#9a3412", fontWeight: 500 }}>
+            ⚠ {state.gateError.message}
+          </p>
+          <button className="btn ghost" style={{ marginTop: "10px" }} onClick={() => navigate("/questionnaire")}>
+            Back to Questionnaire →
+          </button>
+        </div>
+      )}
+
       {/* Latest version — hero display */}
-      {!state.busy && latest && (
+      {!state.busy && !isPrefetching && latest && (
         <div className="psp-latest">
-          <div className="psp-version-badge">
+          <div className="psp-version-badge" style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
             <span className="psp-live-dot" aria-hidden="true" />
             Latest · Version {latest.version}
             {latest.created_at && (
@@ -115,8 +76,14 @@ export default function PositioningPage({ workflow }) {
                 {" · "}{new Date(latest.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
               </span>
             )}
+            <AiChip />
+            <TrustBadge score={latest.quality_score} />
           </div>
           <PositioningCard positioning={latest} isLatest />
+          <WhyThis reasoning={latest.reasoning} />
+          <div style={{ marginTop: "12px" }}>
+            <FeedbackThumbs projectId={state.activeProjectId} agent="positioning_copilot" qualityScore={latest.quality_score} />
+          </div>
         </div>
       )}
 

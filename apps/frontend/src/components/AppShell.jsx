@@ -12,23 +12,22 @@ const STEP_GROUPS = [
   {
     phase: "Analyse",
     steps: [
-      { to: "/analysis",  label: "Competitive Benchmarking", n: "03" },
-      { to: "/positioning",label: "Positioning",             n: "04" },
+      { to: "/analysis", label: "Competitive Benchmarking", n: "03" },
     ],
   },
   {
     phase: "Strategise",
     steps: [
-      { to: "/personas", label: "Personas",  n: "05" },
-      { to: "/research", label: "Research",  n: "06" },
-      { to: "/strategy", label: "Strategy",  n: "07" },
+      { to: "/positioning", label: "Positioning", n: "04" },
+      { to: "/personas",    label: "Personas",    n: "05" },
+      { to: "/research",    label: "Research",    n: "06" },
     ],
   },
   {
     phase: "Execute",
     steps: [
-      { to: "/roadmap",  label: "Roadmap",        n: "08" },
-      { to: "/content",  label: "Content Studio", n: "09" },
+      { to: "/roadmap",  label: "Roadmap",        n: "07" },
+      { to: "/content",  label: "Content Studio", n: "08" },
     ],
   },
 ];
@@ -40,12 +39,11 @@ const STEP_DESC = {
   "/positioning":   "Generate a positioning statement for your strongest segment.",
   "/research":      "Deep-dive into target customers and the competitive landscape.",
   "/personas":      "Review AI-built buyer personas grounded in real market data.",
-  "/strategy":      "Get prioritised channel recommendations based on your goals.",
-  "/roadmap":       "Turn your strategy into a focused 90-day execution plan.",
+  "/roadmap":       "Turn your plan into a focused 90-day execution roadmap.",
   "/content":       "Generate campaign-ready assets for every channel.",
 };
 
-const TOTAL_STEPS = 9;
+const TOTAL_STEPS = 8;
 
 function userInitials(email = "") {
   return email.charAt(0).toUpperCase() || "?";

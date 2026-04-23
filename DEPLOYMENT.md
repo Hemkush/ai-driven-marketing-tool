@@ -112,12 +112,26 @@ gcloud run deploy ai-marketing-backend \
 > **Save this URL — you need it for the next step.**
 
 ### 3d. Run database migrations
+
+**Option A — via Cloud Run Job (recommended for production):**
 ```bash
-# Set the DATABASE_URL locally and run migrations against Supabase
+# Update the job's image to match the newly deployed service
+gcloud run jobs update alembic-migrate \
+  --region us-central1 \
+  --image gcr.io/your-project-id/ai-marketing-backend:latest
+
+# Execute and wait for completion
+gcloud run jobs execute alembic-migrate --region us-central1 --wait
+```
+
+**Option B — locally against Supabase:**
+```bash
 cd apps/backend
 DATABASE_URL="postgresql+psycopg://postgres.[ref]:[password]@aws-0-[region].pooler.supabase.com:5432/postgres?sslmode=require" \
   alembic upgrade head
 ```
+
+> **Important:** The `alembic-migrate` job image must always match the deployed backend image — otherwise it will fail with `Can't locate revision identified by '<id>'`. Update the job image every time you rebuild the backend.
 
 ---
 
@@ -181,13 +195,26 @@ open https://your-project-id.web.app
 
 ## Updating the App (Future Deploys)
 
+> **Set the correct project first:**
+> ```bash
+> gcloud config set project your-project-id
+> ```
+
 ### Redeploy backend after code changes:
 ```bash
-cd apps/backend
-gcloud builds submit --tag gcr.io/your-project-id/ai-marketing-backend
-gcloud run deploy ai-marketing-backend \
+# 1. Build and push the image
+gcloud builds submit apps/backend --tag gcr.io/your-project-id/ai-marketing-backend
+
+# 2. Deploy the Cloud Run service (service name: "backend" in production)
+gcloud run deploy backend \
   --image gcr.io/your-project-id/ai-marketing-backend \
-  --region us-central1
+  --region us-central1 --platform managed
+
+# 3. If there are new migrations — update job image and run
+gcloud run jobs update alembic-migrate \
+  --region us-central1 \
+  --image gcr.io/your-project-id/ai-marketing-backend:latest
+gcloud run jobs execute alembic-migrate --region us-central1 --wait
 ```
 
 ### Redeploy frontend after code changes:
@@ -230,3 +257,18 @@ Cloud Run charges only activate if you exceed 2M requests/month (extremely unlik
 **Alembic migration fails:**
 - Make sure pgvector extension is enabled in Supabase SQL Editor first
 - Run `CREATE EXTENSION IF NOT EXISTS vector;` before migrations
+
+**`alembic-migrate` Cloud Run Job fails with "Can't locate revision":**
+- The job is using an older image that doesn't have the new migration file
+- Update the job to the latest image:
+  ```bash
+  gcloud run jobs update alembic-migrate \
+    --region us-central1 \
+    --image gcr.io/your-project-id/ai-marketing-backend:latest
+  ```
+- Then re-execute: `gcloud run jobs execute alembic-migrate --region us-central1 --wait`
+
+**`gcloud builds submit` fails with permission denied (push to registry):**
+- The active GCP project may be wrong — run `gcloud config get-value project` to check
+- Set the correct project: `gcloud config set project your-project-id`
+- The Cloud Build service account for project A cannot push to a registry in project B

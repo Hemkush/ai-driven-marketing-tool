@@ -1,6 +1,5 @@
 import json
 import logging
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -30,7 +29,9 @@ from app.api.mvp.deps import (
     _latest_session_for_project,
     _compact_discovery_responses,
     _serialize_analysis_report_row,
+    _quality_gate,
 )
+from app.core.quality_scorer import score_competitive_benchmarking
 
 router = APIRouter(prefix="/api/mvp", tags=["analysis"])
 
@@ -91,6 +92,7 @@ def run_analysis_contract(
             report_payload = run_competitive_benchmarking(
                 response_payload,
                 business_address=project.business_address,
+                geographical_range=project.geographical_range,
                 conversation_analysis=conversation_analysis,
             )
         set_cached(db, cache_key, agent="competitive_benchmarker", payload=report_payload)
@@ -98,11 +100,15 @@ def run_analysis_contract(
         logger.info("pipeline_step", extra={"step": "competitive_benchmarker",
             "project_id": business_profile_id, "status": "cached"})
 
+    quality_score = score_competitive_benchmarking(report_payload)
+    _quality_gate(quality_score, agent="competitive_benchmarker")
+
     report = AnalysisReport(
         project_id=business_profile_id,
         source_session_id=source_session.id if source_session else None,
         status="ready",
         report_json=json.dumps(report_payload),
+        quality_score=quality_score,
     )
     db.add(report)
     db.commit()
@@ -114,6 +120,7 @@ def run_analysis_contract(
         "status": report.status,
         "report": report_payload,
         "business_location": project.business_address or "",
+        "geographical_range": project.geographical_range or "",
         "used_additional_context": bool(extra_context),
         "source_session_id": report.source_session_id,
     }
@@ -153,13 +160,11 @@ def query_analysis_assistant(
     response_payload = _compact_discovery_responses(responses, max_items=10)
     analysis_payload = json.loads(analysis_report.report_json)
 
-    # Run memory retrieval (embedding API call) in parallel with response_payload build
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        memory_future = executor.submit(
-            retrieve_relevant_memory,
-            db, business_profile_id, payload.message,
-        )
-        memory_context_chunks = memory_future.result()
+    memory_context_chunks = retrieve_relevant_memory(
+        db,
+        project_id=business_profile_id,
+        query=payload.message,
+    )
 
     assistant = answer_analysis_question(
         question=payload.message,

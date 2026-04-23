@@ -12,7 +12,6 @@ import ProjectsPage from "./pages/ProjectsPage";
 import QuestionnairePage from "./pages/QuestionnairePage";
 import ResearchPage from "./pages/ResearchPage";
 import RoadmapPage from "./pages/RoadmapPage";
-import StrategyPage from "./pages/StrategyPage";
 import VerifyEmailPage from "./pages/VerifyEmailPage";
 import { useMvpWorkflow } from "./state/useMvpWorkflow";
 
@@ -29,7 +28,6 @@ export default function App() {
     "/positioning": Boolean(sessionProgress["/positioning"]) || Boolean(state.positioning),
     "/personas": Boolean(sessionProgress["/personas"]) || Boolean(state.personas.length),
     "/research": Boolean(sessionProgress["/research"]) || Boolean(state.research),
-    "/strategy": Boolean(sessionProgress["/strategy"]) || Boolean(state.strategy),
     "/roadmap": Boolean(sessionProgress["/roadmap"]) || Boolean(state.roadmap),
     "/content": Boolean(sessionProgress["/content"]) || Boolean(state.contentAssets.length),
   };
@@ -60,7 +58,6 @@ export default function App() {
         <Route path="/positioning" element={<PositioningPage workflow={workflow} />} />
         <Route path="/research" element={<ResearchPage workflow={workflow} />} />
         <Route path="/personas" element={<PersonasPage workflow={workflow} />} />
-        <Route path="/strategy" element={<StrategyPage workflow={workflow} />} />
         <Route path="/roadmap" element={<RoadmapPage workflow={workflow} />} />
         <Route path="/content" element={<ContentPage workflow={workflow} />} />
         <Route path="*" element={<Navigate to="/projects" replace />} />

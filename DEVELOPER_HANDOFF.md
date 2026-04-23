@@ -270,12 +270,18 @@ All application state lives in a single custom React hook. Key state:
 | `pendingVerificationEmail` | Set when signup awaiting email verification |
 | `contentAssets` | Generated content items |
 | `competitors` / `benchmarkData` | Competitive analysis results |
-| `roadmap`, `personas`, `channelStrategy` | Generated marketing artifacts |
+| `roadmap`, `personas` | Generated marketing artifacts |
+| `positioningHistory` | Array of positioning statement versions (latest first) |
+| `positioningFeedback` | User's feedback text for refinement |
+| `prefetch` | `{ positioning: bool, personas: bool }` — tracks background prefetch in flight |
 
 **Key actions:**
-- `resetForNewSession()` — clears all session/artifact state before starting a new workflow
-- `register()` / `login()` / `logout()`
+- `resetForNewSession()` — clears all session/artifact state (including `prefetch`) before starting a new workflow
+- `register()` / `login()` / `logout()` — auth also resets `prefetch` on logout
 - `resendVerification()` — resends verification email to `pendingVerificationEmail`
+
+**Background prefetch pattern (`_bgFetch`):**
+After competitive benchmarking completes, `runAnalysis()` silently fires Positioning and Personas API calls in the background using `_bgFetch`. This helper never sets `busy = true`, so the UI stays responsive. `prefetch.positioning` / `prefetch.personas` are set to `true` while the calls are in flight, allowing destination pages to show an inline skeleton instead of a clickable "Generate" button — preventing duplicate API calls if the user navigates early.
 
 ### API Client (`lib/api.js`)
 - Axios instance with `baseURL` from `VITE_API_BASE_URL` env var
@@ -332,6 +338,7 @@ All application state lives in a single custom React hook. Key state:
 | name | varchar(200) | |
 | description | text | nullable |
 | business_address | varchar(500) | nullable — used for Google Places competitor search |
+| geographical_range | varchar(100) | nullable — human-readable search radius (e.g. "5 miles") from competitive benchmarker |
 | owner_id | integer FK | → users.id |
 | created_at | timestamptz | |
 
@@ -343,6 +350,28 @@ Tracks the conversational onboarding interview per project. Sessions have a `sta
 
 #### `memory_chunks`
 Stores semantic memory from questionnaire responses. Uses pgvector `Vector(1536)` column for embeddings from `text-embedding-3-small`. Content hash prevents duplicates.
+
+#### `llm_cache`
+| Column | Type | Notes |
+|---|---|---|
+| id | integer PK | |
+| cache_key | varchar(64) | SHA-256 hex, unique, indexed |
+| agent | varchar(100) | which service produced the result |
+| payload_json | text | serialised LLM response |
+| created_at | timestamptz | server default; TTL enforced in app code |
+
+#### `pipeline_runs`
+| Column | Type | Notes |
+|---|---|---|
+| id | integer PK | |
+| project_id | integer FK | nullable → projects.id |
+| step | varchar(100) | agent name, e.g. `competitive_benchmarker` |
+| status | varchar(20) | `success`, `error`, `cached` |
+| started_at | timestamptz | |
+| completed_at | timestamptz | nullable |
+| duration_ms | integer | nullable |
+| error_msg | text | nullable |
+| extra_json | text | nullable — arbitrary metadata |
 
 #### Other tables
 `analysis_reports`, `positioning_statements`, `research_reports`, `persona_profiles`, `channel_strategies`, `roadmap_plans`, `media_assets` — all linked to `project_id`.
@@ -747,6 +776,57 @@ This is a psycopg v3-specific requirement — psycopg2 handled type registration
 ### 14. OpenAI Regional API Keys
 
 API keys provisioned on the US region only work with `us.api.openai.com/v1`, not `api.openai.com/v1`. Using the global endpoint returns HTTP 401 with `incorrect_hostname` error. Set `OPENAI_BASE_URL=https://us.api.openai.com/v1` in Cloud Run environment variables.
+
+---
+
+### 15. Gate Pages Cause Duplicate API Calls During Background Prefetch
+
+When background prefetch is in flight (`prefetch.positioning = true`), the destination page's `hasHistory` check is still `false`. If the page renders an empty-state "Generate →" button during this window, users can click it and fire a duplicate API call — wasting tokens and causing a race condition.
+
+**Pattern to avoid:**
+```jsx
+// BAD — gate page with early return
+if (!hasHistory) return <GatePage onGenerate={actions.generatePositioning} />;
+```
+
+**Correct pattern:**
+```jsx
+const isPrefetching = !hasHistory && state.prefetch?.positioning;
+
+// Always render the main layout; disable the button and show inline skeleton
+<button disabled={state.busy || isPrefetching || !state.activeProjectId}>
+  Generate Positioning
+</button>
+
+{isPrefetching && !state.busy && (
+  <LoadingSkeleton message="Preparing your positioning statement…" />
+)}
+```
+
+The `isPrefetching` flag drives both the disabled button state and the inline skeleton, so the user sees progress without being able to trigger a duplicate call.
+
+---
+
+### 16. Alembic-Migrate Cloud Run Job — Image Must Stay in Sync
+
+The `alembic-migrate` Cloud Run Job runs `alembic upgrade head` on each deployment. It must use the **same image** as the Cloud Run service so migration files in the job match those the service expects.
+
+If the job's image lags behind (e.g., still pointing at an old digest), it will fail with:
+```
+FAILED: Can't locate revision identified by '<revision_id>'
+```
+
+After every backend image rebuild, update the job:
+```bash
+gcloud run jobs update alembic-migrate \
+  --region us-central1 \
+  --image gcr.io/ai-marketing-prod/ai-marketing-backend:latest
+```
+
+Then execute:
+```bash
+gcloud run jobs execute alembic-migrate --region us-central1 --wait
+```
 
 ---
 

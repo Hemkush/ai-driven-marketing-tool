@@ -20,7 +20,9 @@ from app.api.mvp.deps import (
     _owned_project_or_404,
     _latest_analysis_or_404,
     _serialize_research_report_row,
+    _quality_gate,
 )
+from app.core.quality_scorer import score_output
 
 router = APIRouter(prefix="/api/mvp", tags=["research"])
 
@@ -73,11 +75,21 @@ def run_research_contract(
             business_address=project.business_address,
         )
 
+    quality_score = score_output(
+        agent="market_researcher",
+        output=research_payload,
+        required_keys=["project_name", "target_customer_insights", "competitor_insights", "research_summary"],
+        list_keys=["target_customer_insights", "competitor_insights"],
+        min_length=200,
+    )
+    _quality_gate(quality_score, agent="market_researcher")
+
     report = ResearchReport(
         project_id=business_profile_id,
         source_session_id=analysis_report.source_session_id,
         status="ready",
         report_json=json.dumps(research_payload),
+        quality_score=quality_score,
     )
     db.add(report)
     db.commit()

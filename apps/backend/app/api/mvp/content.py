@@ -6,7 +6,6 @@ from sqlalchemy.orm import Session
 from app.core.auth import get_current_user
 from app.db import get_db
 from app.models import (
-    ChannelStrategy,
     MediaAsset,
     RoadmapPlan,
     User,
@@ -18,7 +17,9 @@ from app.api.mvp.deps import (
     _resolve_business_profile_id,
     _owned_project_or_404,
     _serialize_asset_row,
+    _quality_gate,
 )
+from app.core.quality_scorer import score_content
 
 router = APIRouter(prefix="/api/mvp", tags=["content"])
 
@@ -33,17 +34,6 @@ def generate_content_contract(
         payload.business_profile_id, payload.project_id
     )
     project = _owned_project_or_404(db, current_user, business_profile_id)
-    strategy_row = (
-        db.query(ChannelStrategy)
-        .filter(ChannelStrategy.project_id == business_profile_id)
-        .order_by(ChannelStrategy.id.desc())
-        .first()
-    )
-    if not strategy_row:
-        raise HTTPException(
-            status_code=404,
-            detail="No strategy found. Run /api/mvp/strategy/generate first.",
-        )
     roadmap_row = (
         db.query(RoadmapPlan)
         .filter(RoadmapPlan.project_id == business_profile_id)
@@ -59,23 +49,27 @@ def generate_content_contract(
     generated = generate_content_assets(
         project_name=project.name,
         roadmap=json.loads(roadmap_row.plan_json),
-        strategy=json.loads(strategy_row.strategy_json),
+        strategy={},
         asset_type=payload.asset_type,
         prompt_text=payload.prompt_text,
         num_variants=payload.num_variants,
         tone=payload.tone,
     )
 
+    quality_score = score_content(generated)
+    _quality_gate(quality_score, agent="content_studio")
+
     rows = []
     for item in generated:
         row = MediaAsset(
             project_id=business_profile_id,
-            source_session_id=roadmap_row.source_session_id or strategy_row.source_session_id,
+            source_session_id=roadmap_row.source_session_id,
             asset_type=item["asset_type"],
             prompt_text=payload.prompt_text,
             storage_uri=item["storage_uri"],
             metadata_json=json.dumps(item["metadata"]),
             status=item.get("status", "ready"),
+            quality_score=quality_score,
         )
         db.add(row)
         db.flush()

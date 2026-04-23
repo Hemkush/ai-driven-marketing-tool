@@ -1,6 +1,10 @@
+import { useNavigate } from "react-router-dom";
 import { NextStepCta } from "../components/UiBlocks";
 import { ContentAssetCards } from "../components/CompactCards";
 import { LoadingSkeleton } from "../components/LoadingSkeleton";
+import { TrustBadge } from "../components/TrustBadge";
+import { AiChip } from "../components/AiChip";
+import { FeedbackThumbs } from "../components/FeedbackThumbs";
 
 const ASSET_CATEGORIES = [
   {
@@ -43,6 +47,7 @@ const TONES = [
 
 export default function ContentPage({ workflow }) {
   const { state, set, actions } = workflow;
+  const navigate = useNavigate();
   const hasAssets = state.contentAssets?.length > 0;
   const hasRoadmap = !!state.roadmap;
 
@@ -51,8 +56,22 @@ export default function ContentPage({ workflow }) {
   );
   const isVisual = selectedCategory?.label === "Visual Assets";
 
+  const firstAsset = state.contentAssets?.[0];
+
   return (
     <div className="csp-page">
+      {/* Gate error */}
+      {state.gateError?.agent === "content_studio" && (
+        <div style={{ background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: "8px", padding: "14px 16px", marginBottom: "16px" }}>
+          <p style={{ margin: 0, fontSize: "14px", color: "#9a3412", fontWeight: 500 }}>
+            ⚠ {state.gateError.message}
+          </p>
+          <button className="btn ghost" style={{ marginTop: "10px" }} onClick={() => navigate("/questionnaire")}>
+            Back to Questionnaire →
+          </button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="csp-header">
         <div className="csp-header-text">
@@ -204,10 +223,15 @@ export default function ContentPage({ workflow }) {
             <span className="csp-assets-count">
               {state.contentAssets.length} asset{state.contentAssets.length !== 1 ? "s" : ""}
             </span>
+            <AiChip />
+            <TrustBadge score={firstAsset?.quality_score} />
             <span className="csp-assets-hint">Ready to copy, download, or schedule</span>
             <button className="csp-clear-all-btn" onClick={actions.clearAllAssets}>
               Clear all
             </button>
+          </div>
+          <div style={{ marginTop: "8px" }}>
+            <FeedbackThumbs projectId={state.activeProjectId} agent="content_studio" qualityScore={firstAsset?.quality_score} />
           </div>
           {(() => {
             // Group assets by type, preserving generation order (newest first)

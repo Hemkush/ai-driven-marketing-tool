@@ -138,6 +138,7 @@ def _fallback_assets(project_name: str, normalized: str, prompt_text: str, num_v
                 "body": f"{prompt_text}\n\nBuilt for {project_name}. Contact us to learn more.",
                 "cta": "Get in touch today",
             }
+        metadata["reasoning"] = f"Content type '{normalized}' generated for {project_name} based on your roadmap priorities and business strategy context."
         variants.append({
             "asset_type": normalized,
             "storage_uri": _storage_uri(project_name, normalized),
@@ -169,6 +170,8 @@ def _generate_text_assets(
         f"You are ContentStudioAgent for {project_name}.\n"
         f"Tone: {tone_desc}\n"
         "Output strict JSON only — no markdown, no explanation.\n"
+        'Include a "reasoning" field (1-2 sentences) in your JSON output citing which strategy '
+        "or roadmap inputs shaped this specific content piece.\n"
         f"Business strategy summary: {json.dumps(strategy, ensure_ascii=True)[:800]}\n"
         f"Roadmap summary: {json.dumps(roadmap, ensure_ascii=True)[:600]}"
     )

@@ -1,9 +1,15 @@
+import { useNavigate } from "react-router-dom";
 import { NextStepCta } from "../components/UiBlocks";
 import { ResearchCards } from "../components/CompactCards";
 import { LoadingSkeleton } from "../components/LoadingSkeleton";
+import { TrustBadge } from "../components/TrustBadge";
+import { WhyThis } from "../components/WhyThis";
+import { AiChip } from "../components/AiChip";
+import { FeedbackThumbs } from "../components/FeedbackThumbs";
 
 export default function ResearchPage({ workflow }) {
   const { state, actions } = workflow;
+  const navigate = useNavigate();
   const hasResearch = !!state.research;
   const hasPersonas = state.personas?.length > 0;
 
@@ -11,6 +17,16 @@ export default function ResearchPage({ workflow }) {
   if (!state.busy && !hasResearch) {
     return (
       <div className="rsp-page">
+        {state.gateError?.agent === "market_researcher" && (
+          <div style={{ background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: "8px", padding: "14px 16px", marginBottom: "16px" }}>
+            <p style={{ margin: 0, fontSize: "14px", color: "#9a3412", fontWeight: 500 }}>
+              ⚠ {state.gateError.message}
+            </p>
+            <button className="btn ghost" style={{ marginTop: "10px" }} onClick={() => navigate("/questionnaire")}>
+              Back to Questionnaire →
+            </button>
+          </div>
+        )}
         <div className="rsp-gate">
           <div className="rsp-gate-icon" aria-hidden="true">
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none"
@@ -53,7 +69,7 @@ export default function ResearchPage({ workflow }) {
             Run Market Research →
           </button>
         </div>
-        <NextStepCta to="/strategy" label="Next: Strategy" disabled={true} />
+        <NextStepCta to="/roadmap" label="Next: Roadmap" disabled={true} />
       </div>
     );
   }
@@ -78,15 +94,37 @@ export default function ResearchPage({ workflow }) {
         </button>
       </div>
 
+      {/* Gate error */}
+      {state.gateError?.agent === "market_researcher" && (
+        <div style={{ background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: "8px", padding: "14px 16px", marginBottom: "16px" }}>
+          <p style={{ margin: 0, fontSize: "14px", color: "#9a3412", fontWeight: 500 }}>
+            ⚠ {state.gateError.message}
+          </p>
+          <button className="btn ghost" style={{ marginTop: "10px" }} onClick={() => navigate("/questionnaire")}>
+            Back to Questionnaire →
+          </button>
+        </div>
+      )}
+
       {state.busy && (
         <LoadingSkeleton lines={5} message="Running deep market research…" />
       )}
 
       {!state.busy && hasResearch && (
-        <ResearchCards research={state.research} />
+        <>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px", flexWrap: "wrap" }}>
+            <AiChip />
+            <TrustBadge score={state.research?.quality_score} />
+          </div>
+          <ResearchCards research={state.research} />
+          <WhyThis reasoning={state.research?.reasoning} />
+          <div style={{ marginTop: "12px" }}>
+            <FeedbackThumbs projectId={state.activeProjectId} agent="market_researcher" qualityScore={state.research?.quality_score} />
+          </div>
+        </>
       )}
 
-      <NextStepCta to="/strategy" label="Next: Strategy" disabled={!hasResearch} />
+      <NextStepCta to="/roadmap" label="Next: Roadmap" disabled={!hasResearch} />
     </div>
   );
 }

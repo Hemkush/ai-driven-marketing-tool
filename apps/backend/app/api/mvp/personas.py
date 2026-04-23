@@ -21,7 +21,9 @@ from app.api.mvp.deps import (
     _latest_analysis_or_404,
     _safe_json_object,
     _serialize_persona_row,
+    _quality_gate,
 )
+from app.core.quality_scorer import score_personas
 
 router = APIRouter(prefix="/api/mvp", tags=["personas"])
 
@@ -63,6 +65,9 @@ def generate_personas_contract(
             )
         set_cached(db, cache_key, agent="persona_builder", payload={"personas": personas})
 
+    quality_score = score_personas(personas)
+    _quality_gate(quality_score, agent="persona_builder")
+
     created_rows = []
     source_session_id = analysis_row.source_session_id
     if source_session_id:
@@ -81,6 +86,7 @@ def generate_personas_contract(
             source_session_id=source_session_id,
             persona_name=persona.get("name", "Unnamed Persona"),
             persona_json=json.dumps(persona),
+            quality_score=quality_score,
         )
         db.add(row)
         db.flush()

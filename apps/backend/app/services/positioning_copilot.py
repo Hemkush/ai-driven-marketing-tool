@@ -34,6 +34,7 @@ def _extract_benchmarking_context(analysis_report: dict) -> dict:
             "format": "competitive_benchmarking",
             "business_type": analysis_report.get("business_keyword", ""),
             "location": analysis_report.get("business_location", ""),
+            "geographical_range": analysis_report.get("geographical_range", ""),
             "market_density": market.get("market_density", ""),
             "avg_rating": market.get("avg_rating"),
             "opportunity_gaps": market.get("opportunity_gaps") or [],
@@ -78,6 +79,11 @@ def _fallback_positioning(ctx: dict, owner_feedback: str = "") -> dict:
         "tagline": f"Your trusted local {business_type}.",
         "rationale": "Generated from baseline positioning heuristics."
         + (f" Owner feedback: {owner_feedback.strip()[:300]}" if owner_feedback.strip() else ""),
+        "reasoning": (
+            f"Positioning built from your business type ({business_type}) and location ({location}). "
+            "Differentiators reflect common advantages for locally-operated businesses versus larger competitors."
+            + (f" Your feedback was incorporated: {owner_feedback.strip()[:150]}" if owner_feedback.strip() else "")
+        ),
     }
 
 
@@ -95,7 +101,8 @@ def generate_positioning(
         context_block = (
             f"Business type: {ctx['business_type']}\n"
             f"Location: {ctx['location']}\n"
-            f"Market density: {ctx['market_density']}\n"
+            + (f"Geographical reach: {ctx['geographical_range']}\n" if ctx.get('geographical_range') else "")
+            + f"Market density: {ctx['market_density']}\n"
             f"Average competitor rating: {ctx['avg_rating']}\n\n"
             f"Top competitors:\n{json.dumps(ctx['top_competitors'], ensure_ascii=True)}\n\n"
             f"Market opportunity gaps:\n" + "\n".join(f"- {g}" for g in ctx["opportunity_gaps"]) + "\n\n"
@@ -130,7 +137,9 @@ def generate_positioning(
         "- key_differentiators must reference actual gaps found in the competitor data\n"
         "- proof_points must be things the owner can actually demonstrate (not vague claims)\n"
         "- If owner feedback is provided, it takes priority over the data\n"
-        "- Do NOT use phrases like 'unparalleled', 'world-class', or 'best-in-class'\n\n"
+        "- Do NOT use phrases like 'unparalleled', 'world-class', or 'best-in-class'\n"
+        '- Include a "reasoning" field (2-3 sentences) citing which specific business inputs '
+        "(location, competitor gaps, owner feedback) drove the positioning choices.\n\n"
         f"Market context:\n{context_block}"
         f"{feedback_block}"
     )

@@ -9,11 +9,11 @@ from app.core.quality_scorer import score_roadmap
 
 def _fallback_roadmap(
     project_name: str,
-    strategy: dict,
     personas: list[dict],
+    strategy: dict | None = None,
 ) -> dict:
     persona_names = [p.get("name", "Persona") for p in personas][:3]
-    prioritized_channels = strategy.get("prioritized_channels", [])
+    prioritized_channels = (strategy or {}).get("prioritized_channels", [])
     top_channels = [c.get("channel", "") for c in prioritized_channels][:3]
 
     weeks = []
@@ -67,28 +67,33 @@ def _fallback_roadmap(
             "Conversion rate to booking/sale",
             "Retention or repeat purchase trend",
         ],
+        "reasoning": (
+            f"Roadmap structured around {len(persona_names)} persona(s) ({', '.join(persona_names) or 'your target customers'}) "
+            f"with priority on {', '.join(top_channels) or 'your top channels'}. "
+            "Timeline follows a Foundation → Execution → Optimization arc based on standard 90-day growth patterns."
+        ),
     }
 
 
 def generate_roadmap_plan(
     project_name: str,
-    strategy: dict,
     personas: list[dict],
+    strategy: dict | None = None,
 ) -> dict:
     if not settings.can_use_openai():
-        return _fallback_roadmap(project_name, strategy, personas)
+        return _fallback_roadmap(project_name, personas)
 
     prompt = (
         "You are RoadmapPlannerAgent.\n"
         "Generate a practical 90-day implementation roadmap.\n"
         "Return strict JSON with keys:\n"
         "project_name, duration_days, target_personas, priority_channels, "
-        "weekly_plan, milestones, success_metrics.\n"
+        "weekly_plan, milestones, success_metrics, reasoning.\n"
         "weekly_plan must include 12 week entries and each entry must include:\n"
         "week, phase, objective, tasks, owner, kpi.\n"
-        "Milestones should include at least day 30/60/90 goals.\n\n"
+        "Milestones should include at least day 30/60/90 goals.\n"
+        'reasoning: 2-3 sentences citing which persona and channel inputs shaped the roadmap priorities.\n\n'
         f"Project: {project_name}\n"
-        f"Strategy: {json.dumps(strategy, ensure_ascii=True)}\n"
         f"Personas: {json.dumps(personas, ensure_ascii=True)}"
     )
 
@@ -114,8 +119,8 @@ def generate_roadmap_plan(
             "success_metrics",
         }
         if not required.issubset(parsed.keys()):
-            return _fallback_roadmap(project_name, strategy, personas)
+            return _fallback_roadmap(project_name, personas)
         score_roadmap(parsed)
         return parsed
     except Exception:
-        return _fallback_roadmap(project_name, strategy, personas)
+        return _fallback_roadmap(project_name, personas)

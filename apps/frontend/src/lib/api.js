@@ -24,11 +24,14 @@ export function initAuthToken() {
   return token;
 }
 
-// Auto-clear expired/invalid tokens and redirect to login
+// Auto-clear expired/invalid tokens and redirect to login.
+// Skip the redirect for the login endpoint itself — a 401 there just means wrong credentials.
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    const isAuthEndpoint = error.config?.url?.includes("/auth/login") ||
+                           error.config?.url?.includes("/auth/register");
+    if (error.response?.status === 401 && !isAuthEndpoint) {
       setAuthToken(null);
       window.location.href = "/";
     }

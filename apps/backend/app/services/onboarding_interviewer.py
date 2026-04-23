@@ -17,8 +17,8 @@ DEFAULT_QUESTIONS = [
     "What is your approximate monthly marketing budget range?",
 ]
 
-REQUIRED_CHAT_TOPICS = ["business", "customer", "competitors", "budget", "cost", "goal"]
-IMPORTANT_POINT_TOPICS = {"business", "customer", "competitors", "budget", "cost", "goal"}
+REQUIRED_CHAT_TOPICS = ["business", "customer", "geographical_range", "goal", "competitors", "budget", "cost"]
+IMPORTANT_POINT_TOPICS = {"business", "customer", "geographical_range", "goal", "competitors", "budget", "cost"}
 POINT_STOP_WORDS = {
     "the",
     "and",
@@ -359,6 +359,8 @@ def _topic_coverage(responses: list[dict]) -> set[str]:
         coverage.add("customer")
     if any(k in text for k in ["competitor", "competition", "alternative", "rival"]):
         coverage.add("competitors")
+    if any(k in text for k in ["miles", "kilometers", "km away", "minute drive", "minute walk", "willing to travel", "how far", "service area", "delivery radius", "nationwide", "countrywide", "statewide", "serve online only", "online only", "international", "within the city", "within our town", "across the state"]):
+        coverage.add("geographical_range")
     if any(k in text for k in ["budget", "spend", "ad spend", "marketing budget"]):
         coverage.add("budget")
     if any(k in text for k in ["cost", "cac", "acquisition cost", "expense"]):
@@ -379,10 +381,11 @@ def _fallback_chat_question(responses: list[dict]) -> dict:
         mapping = {
             "business": "What does your business offer, and what makes it valuable to customers?",
             "customer": "Who is your ideal customer, and what are their top needs?",
+            "geographical_range": "How far are your customers typically willing to travel to reach your business? (e.g. 5 miles, 10 miles, 20 miles) — or do you serve them online, regionally, or nationwide?",
+            "goal": "What is your top business goal or priority for the next 12 months?",
             "competitors": "Who are your top competitors, and where do they currently outperform you?",
             "budget": "What is your approximate monthly marketing budget range?",
             "cost": "What is your current average cost to acquire one customer, if known?",
-            "goal": "What is your top business plan or goal for the next 12 months?",
         }
         return {
             "question_text": mapping[topic],
@@ -529,8 +532,9 @@ def generate_next_chat_question(responses: list[dict]) -> dict:
         "Requirements:\n"
         "- Question must be specific and non-repetitive.\n"
         "- Ask to fill missing topic coverage first, in this strict order:\n"
-        "  1) business 2) customer 3) competitors 4) budget 5) cost 6) goal/plan.\n"
-        "- Required topics: business, customer, competitors, budget, cost, goal/plan.\n"
+        "  1) business 2) customer 3) geographical_range 4) goal 5) competitors 6) budget 7) cost.\n"
+        "- Required topics: business, customer, geographical_range, goal, competitors, budget, cost.\n"
+        "- For geographical_range, ask how far customers travel and include examples like '5 miles, 10 miles, 20 miles' to prompt a specific distance answer, or whether the business is regional/national/online.\n"
         "- Do not repeat or paraphrase previously asked questions.\n"
         "- Keep question concise and practical.\n"
         "- Return strict JSON only:\n"
@@ -577,13 +581,12 @@ def _fallback_marketing_analysis(
             "analysis_source": "fallback",
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "business_location": business_location or "Not provided",
+            "geographical_range": "Not provided",
             "understanding": {
                 "business_model": "unknown",
                 "target_customer": "unknown",
-                "competitors": "unknown",
-                "budget": "unknown",
-                "cost_structure": "unknown",
                 "goal": "unknown",
+                "competitors": "unknown",
             },
             "marketing_insights": [
                 "Start with offer clarity, ideal customer profile, and growth objective."
@@ -597,20 +600,16 @@ def _fallback_marketing_analysis(
     understanding = {
         "business_model": "defined" if any(k in text for k in ["service", "product", "offer"]) else "partial",
         "target_customer": "defined" if any(k in text for k in ["customer", "audience", "buyer"]) else "partial",
-        "competitors": "defined" if any(k in text for k in ["competitor", "competition", "alternative"]) else "partial",
-        "budget": "defined" if any(k in text for k in ["budget", "spend"]) else "missing",
-        "cost_structure": "defined" if any(k in text for k in ["cost", "cac", "expense"]) else "missing",
         "goal": "defined" if any(k in text for k in ["goal", "objective", "target", "plan"]) else "partial",
+        "competitors": "defined" if any(k in text for k in ["competitor", "competition", "alternative"]) else "partial",
     }
     marketing_insights = []
     if understanding["target_customer"] != "defined":
         marketing_insights.append("Clarify target customer segment to avoid generic messaging.")
-    if understanding["competitors"] != "defined":
-        marketing_insights.append("Capture competitor landscape to sharpen positioning.")
-    if understanding["budget"] == "missing":
-        marketing_insights.append("Budget is missing; channel strategy cannot be prioritized yet.")
     if understanding["goal"] != "defined":
         marketing_insights.append("Set a measurable 12-month goal for campaign direction.")
+    if understanding["competitors"] != "defined":
+        marketing_insights.append("Capture competitor landscape to sharpen positioning.")
     if business_location:
         marketing_insights.append(
             "Use location-specific messaging and local SEO to improve qualified lead capture."
@@ -619,7 +618,7 @@ def _fallback_marketing_analysis(
         marketing_insights.append("Profile quality is strong enough for segmentation and strategy modeling.")
 
     known_count = sum(1 for v in understanding.values() if v == "defined")
-    confidence = "high" if known_count >= 5 else "medium" if known_count >= 3 else "low"
+    confidence = "high" if known_count >= 3 else "medium" if known_count >= 2 else "low"
     important_points = _derive_important_points(responses, max_points=5)
 
     insights = marketing_insights[:4]
@@ -627,12 +626,19 @@ def _fallback_marketing_analysis(
     for item in evidence:
         item["evidence_items"] = _build_evidence_items(responses, item["insight"], max_items=2)
 
+    geo_keywords = ["travel", "distance", "miles", "radius", "local", "regional", "nationwide", "online", "virtual", "remote", "area", "geographic"]
+    geo_text = next(
+        (r.get("answer_text", "") for r in responses
+         if any(k in (r.get("answer_text", "") or "").lower() for k in geo_keywords)),
+        "",
+    )
     return {
         "summary": "Current business profile has been analyzed for marketing readiness.",
         "important_points": important_points,
         "analysis_source": "fallback",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "business_location": business_location or "Not provided",
+        "geographical_range": geo_text.strip()[:200] if geo_text else "5 miles radius",
         "understanding": understanding,
         "marketing_insights": insights,
         "insight_evidence": evidence,
@@ -668,21 +674,20 @@ def analyze_chat_response(
     prompt = (
         "You are a senior marketing strategy panel.\n"
         "Analyze the interview transcript and return strict JSON only.\n"
-        "Focus on: business clarity, customer clarity, competitor intelligence, budget/cost signals, and growth plan quality.\n"
+        "Focus on: business clarity, customer clarity, geographical reach, competitor intelligence, and growth plan quality.\n"
         "Important: important_points must be concise fact bullets, not copied full answers.\n"
-        "Each point must be max 20 words and start with a topic tag (Business/Customer/Competitors/Budget/Cost/Goal).\n"
+        "Each point must be max 20 words and start with a topic tag (Business/Customer/Location/Goal/Competitors).\n"
         "Return JSON shape:\n"
         "{\n"
         '  "summary": "short paragraph",\n'
         '  "important_points": ["short point", "short point"],\n'
-        '  "business_location": "location text",\n'
+        '  "business_location": "city/region where the business operates",\n'
+        '  "geographical_range": "concise description of customer travel range or service area (e.g. 5-mile radius, regional, nationwide, online-only). If the user said they have no idea or did not answer, use \\"5 miles radius\\" as the default.",\n'
         '  "understanding": {\n'
         '    "business_model": "missing|partial|defined",\n'
         '    "target_customer": "missing|partial|defined",\n'
-        '    "competitors": "missing|partial|defined",\n'
-        '    "budget": "missing|partial|defined",\n'
-        '    "cost_structure": "missing|partial|defined",\n'
-        '    "goal": "missing|partial|defined"\n'
+        '    "goal": "missing|partial|defined",\n'
+        '    "competitors": "missing|partial|defined"\n'
         "  },\n"
         '  "marketing_insights": ["...", "...", "..."],\n'
         '  "confidence": "low|medium|high"\n'
@@ -711,9 +716,9 @@ def analyze_chat_response(
         if not isinstance(understanding, dict):
             understanding = {}
         normalized = {}
-        for key in ["business_model", "target_customer", "competitors", "budget", "cost_structure", "goal"]:
-            raw = str(understanding.get(key, "missing")).strip().lower()
-            normalized[key] = raw if raw in {"missing", "partial", "defined"} else "missing"
+        for key in ["business_model", "target_customer", "goal", "competitors"]:
+            raw_val = str(understanding.get(key, "missing")).strip().lower()
+            normalized[key] = raw_val if raw_val in {"missing", "partial", "defined"} else "missing"
 
         insights = data.get("marketing_insights", [])
         if not isinstance(insights, list):
@@ -753,6 +758,7 @@ def analyze_chat_response(
             "business_location": business_location
             or str(data.get("business_location") or "").strip()
             or "Not provided",
+            "geographical_range": str(data.get("geographical_range") or "").strip() or "5 miles radius",
             "understanding": normalized,
             "marketing_insights": final_insights,
             "insight_evidence": evidence,

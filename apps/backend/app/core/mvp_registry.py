@@ -30,15 +30,9 @@ AGENT_REGISTRY = [
         "outputs": ["persona_profiles"],
     },
     {
-        "agent_id": "channel_strategy_planner",
-        "purpose": "Recommend prioritized marketing channels and messaging.",
-        "inputs": ["project_id", "personas", "budget_context"],
-        "outputs": ["channel_strategy"],
-    },
-    {
         "agent_id": "roadmap_planner",
         "purpose": "Create 90-day implementation plan.",
-        "inputs": ["project_id", "channel_strategy"],
+        "inputs": ["project_id", "personas"],
         "outputs": ["roadmap_plan"],
     },
     {

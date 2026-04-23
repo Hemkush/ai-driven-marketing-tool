@@ -28,7 +28,6 @@ BUDGETS: dict[str, int] = {
     "positioning_copilot":      2000,
     "persona_builder":          2500,
     "market_researcher":        2000,
-    "channel_strategy_planner": 2000,
     "roadmap_planner":          2000,
     "onboarding_interviewer":   1500,
     "content_studio":           1500,

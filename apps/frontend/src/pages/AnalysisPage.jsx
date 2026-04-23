@@ -3,6 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { NextStepCta } from "../components/UiBlocks";
 import { CompetitorCards } from "../components/CompactCards";
 import { LoadingSkeleton } from "../components/LoadingSkeleton";
+import { TrustBadge } from "../components/TrustBadge";
+import { WhyThis } from "../components/WhyThis";
+import { AiChip } from "../components/AiChip";
+import { FeedbackThumbs } from "../components/FeedbackThumbs";
 
 /* ── StructuredMessage: parses free-text AI responses into blocks ─────── */
 function StructuredMessage({ text }) {
@@ -196,6 +200,18 @@ export default function AnalysisPage({ workflow }) {
   return (
     <div className="cb-page">
 
+      {/* Gate error */}
+      {state.gateError?.agent === "competitive_benchmarker" && (
+        <div style={{ background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: "8px", padding: "14px 16px", marginBottom: "16px" }}>
+          <p style={{ margin: 0, fontSize: "14px", color: "#9a3412", fontWeight: 500 }}>
+            ⚠ {state.gateError.message}
+          </p>
+          <button className="btn ghost" style={{ marginTop: "10px" }} onClick={() => navigate("/questionnaire")}>
+            Back to Questionnaire →
+          </button>
+        </div>
+      )}
+
       {/* Action bar */}
       <div className="cb-action-bar">
         <div className="cb-action-info">
@@ -255,7 +271,15 @@ export default function AnalysisPage({ workflow }) {
 
           {/* Left: results */}
           <div className="cb-main">
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px", flexWrap: "wrap" }}>
+              <AiChip />
+              <TrustBadge score={state.analysis?.quality_score} />
+            </div>
             <CompetitorCards analysis={state.analysis} />
+            <WhyThis reasoning={state.analysis?.reasoning} />
+            <div style={{ marginTop: "12px" }}>
+              <FeedbackThumbs projectId={state.activeProjectId} agent="competitive_benchmarker" qualityScore={state.analysis?.quality_score} />
+            </div>
           </div>
 
           {/* Right: analysis assistant */}

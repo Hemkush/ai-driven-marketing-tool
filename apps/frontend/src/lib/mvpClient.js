@@ -94,10 +94,6 @@ export const pipelineClient = {
     api
       .post("/mvp/personas/generate", { business_profile_id: businessProfileId })
       .then((r) => r.data),
-  generateStrategy: (businessProfileId) =>
-    api
-      .post("/mvp/strategy/generate", { business_profile_id: businessProfileId })
-      .then((r) => r.data),
   generateRoadmap: (businessProfileId) =>
     api
       .post("/mvp/roadmap/generate", { business_profile_id: businessProfileId })
@@ -109,3 +105,6 @@ export const contentClient = {
   listByProject: (businessProfileId) =>
     api.get(`/mvp/content/assets/${businessProfileId}`).then((r) => r.data.items || []),
 };
+
+export const submitFeedback = (payload) =>
+  api.post("/mvp/feedback", payload).then((r) => r.data);

@@ -13,7 +13,6 @@ from sqlalchemy.orm import Session
 
 from app.models import (
     AnalysisReport,
-    ChannelStrategy,
     MediaAsset,
     PersonaProfile,
     PositioningStatement,
@@ -88,6 +87,34 @@ class ContentGenerationRequest(BaseModel):
     prompt_text: str = Field(min_length=2, max_length=5000)
     num_variants: int = Field(default=3, ge=1, le=5)
     tone: str = Field(default="professional", max_length=40)
+
+
+class FeedbackRequest(BaseModel):
+    project_id: int
+    agent: str = Field(min_length=1, max_length=50)
+    quality_score: float | None = None
+    polarity: int = Field(..., ge=-1, le=1)
+
+
+# ── Quality gate ───────────────────────────────────────────────────────────────
+
+_QUALITY_THRESHOLD = 0.65
+
+
+def _quality_gate(score: float, agent: str) -> None:
+    if score < _QUALITY_THRESHOLD:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "incomplete_profile",
+                "agent": agent,
+                "score": round(score, 2),
+                "message": (
+                    "Your business profile needs more detail to generate reliable output. "
+                    "Go back to the questionnaire and answer any skipped questions."
+                ),
+            },
+        )
 
 
 # ── Auth / ownership helpers ───────────────────────────────────────────────────
@@ -209,6 +236,8 @@ def _serialize_positioning_row(row: PositioningStatement) -> dict:
         "business_profile_id": row.project_id,
         "project_id": row.project_id,
         "version": row.version,
+        "quality_score": row.quality_score,
+        "reasoning": payload.get("reasoning"),
         "created_at": row.created_at.isoformat(),
         "source_session_id": row.source_session_id,
     }
@@ -217,12 +246,15 @@ def _serialize_positioning_row(row: PositioningStatement) -> dict:
 def _serialize_analysis_report_row(row: AnalysisReport | None) -> dict | None:
     if not row:
         return None
+    report = json.loads(row.report_json)
     return {
         "analysis_report_id": row.id,
         "business_profile_id": row.project_id,
         "project_id": row.project_id,
         "status": row.status,
-        "report": json.loads(row.report_json),
+        "report": report,
+        "quality_score": row.quality_score,
+        "reasoning": report.get("reasoning"),
         "created_at": row.created_at.isoformat(),
         "updated_at": row.updated_at.isoformat(),
         "source_session_id": row.source_session_id,
@@ -232,61 +264,61 @@ def _serialize_analysis_report_row(row: AnalysisReport | None) -> dict | None:
 def _serialize_research_report_row(row: ResearchReport | None) -> dict | None:
     if not row:
         return None
+    report = json.loads(row.report_json)
     return {
         "research_report_id": row.id,
         "business_profile_id": row.project_id,
         "project_id": row.project_id,
         "status": row.status,
-        "report": json.loads(row.report_json),
+        "report": report,
+        "quality_score": row.quality_score,
+        "reasoning": report.get("reasoning"),
         "created_at": row.created_at.isoformat(),
         "source_session_id": row.source_session_id,
     }
 
 
 def _serialize_persona_row(row: PersonaProfile) -> dict:
+    profile = json.loads(row.persona_json)
     return {
         "id": row.id,
         "name": row.persona_name,
-        "profile": json.loads(row.persona_json),
+        "profile": profile,
+        "quality_score": row.quality_score,
+        "reasoning": profile.get("reasoning"),
         "created_at": row.created_at.isoformat(),
         "source_session_id": row.source_session_id,
     }
 
-
-def _serialize_strategy_row(row: ChannelStrategy | None) -> dict | None:
-    if not row:
-        return None
-    return {
-        "channel_strategy_id": row.id,
-        "business_profile_id": row.project_id,
-        "project_id": row.project_id,
-        "strategy": json.loads(row.strategy_json),
-        "created_at": row.created_at.isoformat(),
-        "source_session_id": row.source_session_id,
-    }
 
 
 def _serialize_roadmap_row(row: RoadmapPlan | None) -> dict | None:
     if not row:
         return None
+    roadmap = json.loads(row.plan_json)
     return {
         "roadmap_plan_id": row.id,
         "business_profile_id": row.project_id,
         "project_id": row.project_id,
-        "roadmap": json.loads(row.plan_json),
+        "roadmap": roadmap,
+        "quality_score": row.quality_score,
+        "reasoning": roadmap.get("reasoning"),
         "created_at": row.created_at.isoformat(),
         "source_session_id": row.source_session_id,
     }
 
 
 def _serialize_asset_row(row: MediaAsset) -> dict:
+    metadata = json.loads(row.metadata_json)
     return {
         "id": row.id,
         "asset_type": row.asset_type,
         "storage_uri": row.storage_uri,
         "prompt_text": row.prompt_text,
-        "metadata": json.loads(row.metadata_json),
+        "metadata": metadata,
         "status": row.status,
+        "quality_score": row.quality_score,
+        "reasoning": metadata.get("reasoning"),
         "created_at": row.created_at.isoformat(),
         "source_session_id": row.source_session_id,
     }
@@ -514,7 +546,6 @@ def _build_session_workflow_snapshot(
     analysis_row = _artifact_for_session(db, AnalysisReport, project.id, session)
     positioning_row = _artifact_for_session(db, PositioningStatement, project.id, session)
     research_row = _artifact_for_session(db, ResearchReport, project.id, session)
-    strategy_row = _artifact_for_session(db, ChannelStrategy, project.id, session)
     roadmap_row = _artifact_for_session(db, RoadmapPlan, project.id, session)
 
     persona_rows = (
@@ -561,7 +592,6 @@ def _build_session_workflow_snapshot(
         "positioning": _serialize_positioning_row(positioning_row) if positioning_row else None,
         "research": _serialize_research_report_row(research_row),
         "personas": [_serialize_persona_row(row) for row in persona_rows],
-        "strategy": _serialize_strategy_row(strategy_row),
         "roadmap": _serialize_roadmap_row(roadmap_row),
         "content_assets": [_serialize_asset_row(row) for row in content_rows],
     }
@@ -572,7 +602,6 @@ def _build_session_workflow_snapshot(
         "/positioning": bool(snapshot["positioning"]),
         "/research": bool(snapshot["research"]),
         "/personas": bool(snapshot["personas"]),
-        "/strategy": bool(snapshot["strategy"]),
         "/roadmap": bool(snapshot["roadmap"]),
         "/content": bool(snapshot["content_assets"]),
     }

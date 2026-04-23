@@ -6,7 +6,6 @@ import {
   PositioningCard,
   ResearchCards,
   RoadmapCards,
-  StrategyCards,
 } from "./CompactCards";
 
 // ── Workflow steps (matches AppShell order) ───────────────────────
@@ -17,9 +16,8 @@ const TIMELINE_STEPS = [
   { route: "/positioning",   label: "Positioning",  n: "04" },
   { route: "/personas",      label: "Personas",     n: "05" },
   { route: "/research",      label: "Research",     n: "06" },
-  { route: "/strategy",      label: "Strategy",     n: "07" },
-  { route: "/roadmap",       label: "Roadmap",      n: "08" },
-  { route: "/content",       label: "Content",      n: "09" },
+  { route: "/roadmap",       label: "Roadmap",      n: "07" },
+  { route: "/content",       label: "Content",      n: "08" },
 ];
 
 function projectInitials(name = "") {
@@ -350,7 +348,7 @@ export default function ProjectPanel({
               </button>
 
               <p className="pp-snapshot-note">
-                Covers discovery, competitor analysis, positioning, personas, strategy, roadmap, and content.
+                Covers discovery, competitor analysis, positioning, personas, roadmap, and content.
               </p>
             </div>
           ) : (
@@ -364,10 +362,10 @@ export default function ProjectPanel({
               </div>
               <h4 className="pp-snapshot-empty-title">No workspace active</h4>
               <p className="pp-snapshot-empty-desc">
-                Create a business profile on the left, or select one from your workspace list — then your full 9-step strategy workflow unlocks here.
+                Create a business profile on the left, or select one from your workspace list — then your full 8-step marketing workflow unlocks here.
               </p>
               <div className="pp-snapshot-steps-preview">
-                {["Discovery", "Analysis", "Positioning", "Personas", "Strategy", "Roadmap"].map((s) => (
+                {["Discovery", "Analysis", "Positioning", "Personas", "Research", "Roadmap"].map((s) => (
                   <span key={s} className="pp-snapshot-step-chip">{s}</span>
                 ))}
               </div>
@@ -528,18 +526,13 @@ export default function ProjectPanel({
                         <ResearchCards research={workflowSnapshot.research.report} />
                       </ArtifactBlock>
                     )}
-                    {workflowSnapshot.strategy && (
-                      <ArtifactBlock stepN="07" title="Channel Strategy">
-                        <StrategyCards strategy={workflowSnapshot.strategy.strategy} />
-                      </ArtifactBlock>
-                    )}
                     {workflowSnapshot.roadmap && (
-                      <ArtifactBlock stepN="08" title="90-Day Roadmap">
+                      <ArtifactBlock stepN="07" title="90-Day Roadmap">
                         <RoadmapCards roadmap={workflowSnapshot.roadmap.roadmap} />
                       </ArtifactBlock>
                     )}
                     {!!workflowSnapshot.content_assets?.length && (
-                      <ArtifactBlock stepN="09" title="Content Studio">
+                      <ArtifactBlock stepN="08" title="Content Studio">
                         <ContentAssetCards assets={workflowSnapshot.content_assets} />
                       </ArtifactBlock>
                     )}

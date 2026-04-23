@@ -20,7 +20,9 @@ from app.api.mvp.deps import (
     _owned_project_or_404,
     _latest_analysis_or_404,
     _serialize_positioning_row,
+    _quality_gate,
 )
+from app.core.quality_scorer import score_positioning
 
 router = APIRouter(prefix="/api/mvp", tags=["positioning"])
 
@@ -50,6 +52,8 @@ def generate_positioning_contract(
         with trace_step(db, step="positioning_copilot", project_id=business_profile_id):
             positioning_payload = generate_positioning(analysis_payload)
         set_cached(db, cache_key, agent="positioning_copilot", payload=positioning_payload)
+    quality_score = score_positioning(positioning_payload)
+    _quality_gate(quality_score, agent="positioning_copilot")
     row = PositioningStatement(
         project_id=business_profile_id,
         source_session_id=analysis_report.source_session_id,
@@ -57,6 +61,7 @@ def generate_positioning_contract(
         statement_text=positioning_payload["positioning_statement"],
         rationale=positioning_payload.get("rationale", ""),
         payload_json=json.dumps(positioning_payload),
+        quality_score=quality_score,
     )
     db.add(row)
     db.commit()
@@ -91,6 +96,8 @@ def refine_positioning_contract(
         analysis_report=analysis_payload,
         owner_feedback=payload.owner_feedback,
     )
+    quality_score = score_positioning(positioning_payload)
+    _quality_gate(quality_score, agent="positioning_copilot")
     row = PositioningStatement(
         project_id=business_profile_id,
         source_session_id=analysis_report.source_session_id,
@@ -98,6 +105,7 @@ def refine_positioning_contract(
         statement_text=positioning_payload["positioning_statement"],
         rationale=positioning_payload.get("rationale", ""),
         payload_json=json.dumps(positioning_payload),
+        quality_score=quality_score,
     )
     db.add(row)
     db.commit()

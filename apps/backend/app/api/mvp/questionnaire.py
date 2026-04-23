@@ -311,6 +311,11 @@ def reply_questionnaire_chat(
     )
     session.conversation_analysis_json = json.dumps(analysis_payload)
 
+    # Persist geographical_range to project so downstream agents can use it
+    extracted_range = analysis_payload.get("geographical_range", "")
+    if extracted_range and extracted_range not in ("Not provided", ""):
+        project.geographical_range = extracted_range[:500]
+
     existing_questions = [r.question_text for r in responses]
     next_question = generate_next_chat_question(answered_payload)
     next_question_text = str(next_question.get("question_text", "")).strip()
