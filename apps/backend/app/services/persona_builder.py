@@ -157,10 +157,25 @@ def _fallback_personas(business_type: str, location: str) -> list[dict]:
     ]
 
 
+def _summarise_discovery(responses: list[dict]) -> str:
+    """Turn compact discovery Q&A into a concise bullet block for the prompt."""
+    if not responses:
+        return ""
+    lines = []
+    for r in responses:
+        q = (r.get("question_text") or "").strip()
+        a = (r.get("answer_text") or "").strip()
+        if q and a:
+            lines.append(f"- {q}: {a}")
+    return "\n".join(lines)
+
+
 def generate_personas(
     project_name: str,
     analysis_report: dict,
     positioning: dict | None = None,
+    discovery_responses: list[dict] | None = None,
+    owner_feedback: str | None = None,
     num_personas: int = 3,
 ) -> list[dict]:
     num_personas = max(2, min(3, num_personas))
@@ -168,6 +183,26 @@ def generate_personas(
 
     if not settings.can_use_openai():
         return _fallback_personas(ctx["business_type"], ctx["location"])[:num_personas]
+
+    discovery_block = ""
+    if discovery_responses:
+        summary = _summarise_discovery(discovery_responses)
+        if summary:
+            discovery_block = (
+                "\nOwner's answers from the marketing discovery interview "
+                "(use these to understand the actual business, its services, "
+                "target customers as the owner sees them, and any unique context "
+                "the owner provided — let this ground the personas in reality):\n"
+                + summary + "\n"
+            )
+
+    feedback_block = ""
+    if owner_feedback:
+        feedback_block = (
+            "\nOwner feedback on previous personas (this takes highest priority — "
+            "adjust or replace personas to address these points directly):\n"
+            + owner_feedback + "\n"
+        )
 
     pos_block = ""
     if positioning:
@@ -220,7 +255,9 @@ def generate_personas(
             + "\n\n"
             if ctx["competitor_customer_segments"] else ""
         )
-        + f"{pos_block}\n"
+        + f"{discovery_block}"
+        + f"{pos_block}"
+        + f"{feedback_block}\n"
         "Rules:\n"
         "- Mine the real customer reviews for exact language, emotions, and recurring themes — "
         "reflect these directly in pain_points_and_frustrations and buying_triggers_and_barriers\n"

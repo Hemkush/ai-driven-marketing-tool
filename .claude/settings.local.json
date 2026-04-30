@@ -14,7 +14,12 @@
       "Bash(.venv/Scripts/python.exe -m alembic current)",
       "Bash(.venv/Scripts/python.exe -m alembic upgrade c1d2e3f4a5b6)",
       "Bash(.venv/Scripts/python.exe -m alembic merge b2c3d4e5f6a7 c1d2e3f4a5b6 -m \"merge_geographical_and_trust_layer\")",
-      "Bash(.venv/Scripts/python.exe -m alembic upgrade heads)"
+      "Bash(.venv/Scripts/python.exe -m alembic upgrade heads)",
+      "Bash(gcloud config *)",
+      "Bash(gcloud auth *)",
+      "Bash(gcloud builds *)",
+      "Bash(gcloud run *)",
+      "Bash(firebase deploy *)"
     ]
   }
 }

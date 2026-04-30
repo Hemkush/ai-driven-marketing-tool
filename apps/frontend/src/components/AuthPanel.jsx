@@ -2,11 +2,12 @@ import { useState } from "react";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
-function validate(email, password, createMode) {
+function validate(email, password, createMode, companyName) {
   if (!email.trim()) return "Email is required.";
   if (!EMAIL_RE.test(email.trim())) return "Enter a valid email address (e.g. you@example.com).";
   if (!password) return "Password is required.";
   if (createMode && password.length < 8) return "Password must be at least 8 characters.";
+  if (createMode && !companyName?.trim()) return "Company or organization name is required.";
   return null;
 }
 
@@ -77,7 +78,7 @@ export default function AuthPanel({
   const [validationError, setValidationError] = useState(null);
 
   const onPrimaryAction = () => {
-    const err = validate(email, password, createMode);
+    const err = validate(email, password, createMode, companyName);
     if (err) { setValidationError(err); return; }
     setValidationError(null);
     if (createMode) { register(); return; }
@@ -146,7 +147,7 @@ export default function AuthPanel({
               <>
                 <label className="cas-label">COMPANY / ORGANIZATION</label>
                 <input
-                  className="cas-input optional"
+                  className="cas-input"
                   placeholder="Company or organization name"
                   value={companyName}
                   onChange={(e) => setCompanyName(e.target.value)}

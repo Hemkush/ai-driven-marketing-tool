@@ -43,7 +43,10 @@ export function useMvpWorkflow() {
   const [positioningHistory, setPositioningHistory] = useState([]);
   const [positioningFeedback, setPositioningFeedback] = useState("");
   const [research, setResearch] = useState(null);
+  const [researchFocus, setResearchFocus] = useState("");
   const [personas, setPersonas] = useState([]);
+  const [personaFeedback, setPersonaFeedback] = useState("");
+  const [personaGenerationContext, setPersonaGenerationContext] = useState(null);
   const [roadmap, setRoadmap] = useState(null);
   const [contentAssets, setContentAssets] = useState([]);
   const [prefetch, setPrefetch] = useState({ positioning: false, personas: false });
@@ -52,6 +55,7 @@ export function useMvpWorkflow() {
   const [assetPrompt, setAssetPrompt] = useState("Create premium launch-week content.");
   const [numVariants, setNumVariants] = useState(3);
   const [assetTone, setAssetTone] = useState("professional");
+  const [toneSuggestion, setToneSuggestion] = useState(null);
 
   const activeProject = useMemo(
     () => projects.find((p) => String(p.id) === String(activeProjectId)) || null,
@@ -225,6 +229,7 @@ export function useMvpWorkflow() {
       setPositioningHistory([]);
       setResearch(null);
       setPersonas([]);
+      setPersonaGenerationContext(null);
       setRoadmap(null);
       setContentAssets([]);
       setAssetTone("professional");
@@ -287,6 +292,7 @@ export function useMvpWorkflow() {
         setPositioningHistory([]);
         setResearch(null);
         setPersonas([]);
+        setPersonaGenerationContext(null);
         setRoadmap(null);
         setContentAssets([]);
         setPrefetch({ positioning: false, personas: false });
@@ -596,16 +602,25 @@ export function useMvpWorkflow() {
 
     runResearch: async () =>
       run(async () => {
-        const data = await pipelineClient.runResearch(Number(activeProjectId));
+        const data = await pipelineClient.runResearch(
+          Number(activeProjectId),
+          researchFocus.trim() || undefined
+        );
         setResearch({ ...data.report, quality_score: data.quality_score });
+        setResearchFocus("");
         await refreshSelectedSessionWorkflow();
         setMsg("Research generated.");
       }, "Generating research..."),
 
     generatePersonas: async () =>
       run(async () => {
-        const data = await pipelineClient.generatePersonas(Number(activeProjectId));
+        const data = await pipelineClient.generatePersonas(
+          Number(activeProjectId),
+          personaFeedback.trim() || undefined
+        );
         setPersonas(data.personas || []);
+        setPersonaGenerationContext(data.generation_context || null);
+        setPersonaFeedback("");
         await refreshSelectedSessionWorkflow();
         setMsg("Personas generated.");
       }, "Generating personas..."),
@@ -641,6 +656,17 @@ export function useMvpWorkflow() {
         setMsg("Loaded stored assets.");
       }, "Loading content assets..."),
 
+    fetchToneSuggestion: async () => {
+      if (!activeProjectId) return;
+      try {
+        const data = await contentClient.suggestTone(activeProjectId);
+        setToneSuggestion(data);
+        setAssetTone(data.suggested_tone);
+      } catch {
+        // non-critical — page still works without suggestion
+      }
+    },
+
     clearAssetsByType: (type) => {
       setContentAssets((prev) => prev.filter((a) => a.asset_type !== type));
     },
@@ -660,6 +686,7 @@ export function useMvpWorkflow() {
       setPositioningHistory([]);
       setResearch(null);
       setPersonas([]);
+      setPersonaGenerationContext(null);
       setRoadmap(null);
       setContentAssets([]);
       setPrefetch({ positioning: false, personas: false });
@@ -701,7 +728,10 @@ export function useMvpWorkflow() {
       positioningHistory,
       positioningFeedback,
       research,
+      researchFocus,
       personas,
+      personaFeedback,
+      personaGenerationContext,
       roadmap,
       contentAssets,
       prefetch,
@@ -710,6 +740,7 @@ export function useMvpWorkflow() {
       assetPrompt,
       numVariants,
       assetTone,
+      toneSuggestion,
     },
     set: {
       setEmail,
@@ -721,6 +752,8 @@ export function useMvpWorkflow() {
       setActiveProjectId,
       setSelectedProjectSessionId,
       setPositioningFeedback,
+      setPersonaFeedback,
+      setResearchFocus,
       setAssetType,
       setAssetPrompt,
       setNumVariants,

@@ -1033,11 +1033,46 @@ export function PositioningCard({ positioning, isLatest = false }) {
   );
 }
 
+const EFFORT_STYLE = {
+  low:    { label: "Low effort",    bg: "#dcfce7", color: "#15803d" },
+  medium: { label: "Medium effort", bg: "#fef9c3", color: "#a16207" },
+  high:   { label: "High effort",   bg: "#fee2e2", color: "#b91c1c" },
+};
+
+const JOURNEY_STAGES = [
+  { key: "awareness",     label: "Awareness",     desc: "How they discover you" },
+  { key: "consideration", label: "Consideration", desc: "What they compare"     },
+  { key: "decision",      label: "Decision",      desc: "What triggers the buy" },
+];
+
 export function ResearchCards({ research }) {
   if (!research) return null;
-  const customerInsights = research.target_customer_insights || [];
-  const competitorInsights = research.competitor_insights || [];
-  const sources = research.sources || [];
+  const [copiedScript, setCopiedScript] = useState(false);
+
+  const customerInsights  = research.target_customer_insights  || [];
+  const competitorInsights = research.competitor_insights      || [];
+  const perPersona         = research.per_persona_insights     || [];
+  const quickWins          = research.quick_wins               || [];
+  const voc                = research.voc_synthesis            || null;
+  const script             = research.interview_script         || null;
+  const jtbd               = research.jtbd_framework           || [];
+  const retention          = research.retention_signals        || null;
+  const sources            = research.sources                  || [];
+
+  function copyScript() {
+    if (!script?.questions?.length) return;
+    const text = [
+      script.intro_note || "",
+      "",
+      ...script.questions.map((q, i) =>
+        `Q${i + 1}: ${q.question}\n  Why ask: ${q.why_ask}\n  Insight: ${q.insight_unlocked}`
+      ),
+    ].join("\n");
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedScript(true);
+      setTimeout(() => setCopiedScript(false), 2000);
+    });
+  }
 
   return (
     <div className="rc-wrap">
@@ -1054,16 +1089,365 @@ export function ResearchCards({ research }) {
         </div>
       )}
 
+      {/* Quick wins */}
+      {quickWins.length > 0 && (
+        <div className="rc-section">
+          <div className="rc-section-head">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+            </svg>
+            <span className="rc-section-title">Quick Wins</span>
+            <span className="rc-col-count">{quickWins.length} actions</span>
+          </div>
+          <div className="rc-quickwins-list">
+            {quickWins.map((w, i) => {
+              const effort = EFFORT_STYLE[w.effort] || EFFORT_STYLE.medium;
+              return (
+                <div key={i} className="rc-quickwin-card">
+                  <div className="rc-quickwin-header">
+                    <span className="rc-quickwin-num">{i + 1}</span>
+                    <p className="rc-quickwin-action">{w.action}</p>
+                  </div>
+                  <p className="rc-quickwin-impact">{w.impact}</p>
+                  <div className="rc-quickwin-meta">
+                    <span className="rc-quickwin-badge"
+                      style={{ background: effort.bg, color: effort.color }}>
+                      {effort.label}
+                    </span>
+                    <span className="rc-quickwin-timeframe">{w.timeframe}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Per-persona buying journeys */}
+      {perPersona.length > 0 && (
+        <div className="rc-section">
+          <div className="rc-section-head">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" />
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
+            </svg>
+            <span className="rc-section-title">Buying Journey by Persona</span>
+            <span className="rc-col-count">{perPersona.length} persona{perPersona.length !== 1 ? "s" : ""}</span>
+          </div>
+          <div className="rc-persona-journey-list">
+            {perPersona.map((p, i) => (
+              <div key={i} className="rc-persona-journey-card">
+                <div className="rc-pj-name">{p.persona_name}</div>
+                <div className="rc-pj-stages">
+                  {JOURNEY_STAGES.map((stage) => (
+                    <div key={stage.key} className="rc-pj-stage">
+                      <span className="rc-pj-stage-label">{stage.label}</span>
+                      <span className="rc-pj-stage-desc">{stage.desc}</span>
+                      <p className="rc-pj-stage-text">{p.buying_journey?.[stage.key] || "—"}</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="rc-pj-footer">
+                  <div className="rc-pj-footer-row">
+                    <span className="rc-pj-footer-label">Key message</span>
+                    <span className="rc-pj-footer-value rc-pj-message">"{p.key_message}"</span>
+                  </div>
+                  <div className="rc-pj-footer-row">
+                    <span className="rc-pj-footer-label">Best channel</span>
+                    <span className="rc-pj-footer-value">{p.best_channel}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Voice of Customer */}
+      {voc && (
+        <div className="rc-section">
+          <div className="rc-section-head">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
+            <span className="rc-section-title">Voice of Customer</span>
+            <span className="rc-col-count">Real customer language</span>
+          </div>
+
+          {/* Sentiment summary */}
+          {voc.sentiment_summary && (
+            <p className="rc-voc-summary">{voc.sentiment_summary}</p>
+          )}
+
+          <div className="rc-voc-grid">
+            {/* Praised themes */}
+            {(voc.praised_themes || []).length > 0 && (
+              <div className="rc-voc-col rc-voc-praised">
+                <div className="rc-voc-col-head">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z" />
+                    <path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3" />
+                  </svg>
+                  What customers love
+                </div>
+                {voc.praised_themes.map((t, i) => (
+                  <div key={i} className="rc-voc-theme-block">
+                    <span className="rc-voc-theme-label">{t.theme}</span>
+                    <div className="rc-voc-quotes">
+                      {(t.quotes || []).map((q, j) => (
+                        <span key={j} className="rc-voc-quote rc-voc-quote-praise">"{q}"</span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Complained themes */}
+            {(voc.complained_themes || []).length > 0 && (
+              <div className="rc-voc-col rc-voc-complained">
+                <div className="rc-voc-col-head">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3H10z" />
+                    <path d="M17 2h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17" />
+                  </svg>
+                  What customers complain about
+                </div>
+                {voc.complained_themes.map((t, i) => (
+                  <div key={i} className="rc-voc-theme-block">
+                    <span className="rc-voc-theme-label">{t.theme}</span>
+                    <div className="rc-voc-quotes">
+                      {(t.quotes || []).map((q, j) => (
+                        <span key={j} className="rc-voc-quote rc-voc-quote-complaint">"{q}"</span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Language patterns */}
+          {(voc.language_patterns || []).length > 0 && (
+            <div className="rc-voc-patterns">
+              <p className="rc-voc-patterns-label">Use these words in your marketing copy</p>
+              <div className="rc-voc-patterns-tags">
+                {voc.language_patterns.map((w, i) => (
+                  <span key={i} className="rc-voc-pattern-tag">{w}</span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Customer Interview Script */}
+      {script && (
+        <div className="rc-section">
+          <div className="rc-section-head">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <polyline points="14 2 14 8 20 8" />
+              <line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" />
+            </svg>
+            <span className="rc-section-title">Customer Interview Script</span>
+            <span className="rc-col-count">{script.questions?.length || 0} questions</span>
+            <button className="rc-script-copy-btn" onClick={copyScript}>
+              {copiedScript
+                ? <><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg> Copied!</>
+                : <><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg> Copy all</>
+              }
+            </button>
+          </div>
+
+          {script.intro_note && (
+            <div className="rc-script-intro">{script.intro_note}</div>
+          )}
+
+          <div className="rc-script-questions">
+            {(script.questions || []).map((q, i) => (
+              <div key={i} className="rc-script-question">
+                <div className="rc-script-q-header">
+                  <span className="rc-script-q-num">Q{i + 1}</span>
+                  <p className="rc-script-q-text">{q.question}</p>
+                </div>
+                <div className="rc-script-q-meta">
+                  <div className="rc-script-q-meta-row">
+                    <span className="rc-script-q-meta-label">Why ask</span>
+                    <span className="rc-script-q-meta-val">{q.why_ask}</span>
+                  </div>
+                  <div className="rc-script-q-meta-row">
+                    <span className="rc-script-q-meta-label">Insight unlocked</span>
+                    <span className="rc-script-q-meta-val">{q.insight_unlocked}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* JTBD Framework */}
+      {jtbd.length > 0 && (
+        <div className="rc-section">
+          <div className="rc-section-head">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83" />
+            </svg>
+            <span className="rc-section-title">Jobs-to-be-Done</span>
+            <span className="rc-col-count">Why customers really hire you</span>
+          </div>
+          <div className="rc-jtbd-list">
+            {jtbd.map((p, i) => (
+              <div key={i} className="rc-jtbd-card">
+                <div className="rc-jtbd-persona-name">{p.persona_name}</div>
+                <div className="rc-jtbd-jobs">
+                  <div className="rc-jtbd-job-row rc-jtbd-functional">
+                    <span className="rc-jtbd-job-label">Functional</span>
+                    <span className="rc-jtbd-job-text">{p.functional_job}</span>
+                  </div>
+                  <div className="rc-jtbd-job-row rc-jtbd-emotional">
+                    <span className="rc-jtbd-job-label">Emotional</span>
+                    <span className="rc-jtbd-job-text">{p.emotional_job}</span>
+                  </div>
+                  <div className="rc-jtbd-job-row rc-jtbd-social">
+                    <span className="rc-jtbd-job-label">Social</span>
+                    <span className="rc-jtbd-job-text">{p.social_job}</span>
+                  </div>
+                </div>
+                <div className="rc-jtbd-triggers">
+                  <div className="rc-jtbd-trigger-col">
+                    <div className="rc-jtbd-trigger-head rc-jtbd-hire-head">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                      Hire triggers
+                    </div>
+                    <ul className="rc-jtbd-trigger-list">
+                      {(p.hire_triggers || []).map((t, j) => (
+                        <li key={j} className="rc-jtbd-trigger-item rc-jtbd-hire">{t}</li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div className="rc-jtbd-trigger-col">
+                    <div className="rc-jtbd-trigger-head rc-jtbd-fire-head">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                      </svg>
+                      Fire triggers
+                    </div>
+                    <ul className="rc-jtbd-trigger-list">
+                      {(p.fire_triggers || []).map((t, j) => (
+                        <li key={j} className="rc-jtbd-trigger-item rc-jtbd-fire">{t}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Retention Signals */}
+      {retention && (
+        <div className="rc-section">
+          <div className="rc-section-head">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="17 1 21 5 17 9" />
+              <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+              <polyline points="7 23 3 19 7 15" />
+              <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+            </svg>
+            <span className="rc-section-title">Customer Retention</span>
+            <span className="rc-col-count">Repeat vs. churn signals</span>
+          </div>
+
+          {retention.ltv_insight && (
+            <p className="rc-retention-insight">{retention.ltv_insight}</p>
+          )}
+
+          <div className="rc-retention-grid">
+            {/* Repeat drivers */}
+            {(retention.repeat_drivers || []).length > 0 && (
+              <div className="rc-retention-col">
+                <div className="rc-retention-col-head rc-retention-repeat-head">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M17 1 21 5l-4 4" /><path d="M3 11V9a4 4 0 0 1 4-4h14" />
+                  </svg>
+                  What drives repeat visits
+                </div>
+                <ul className="rc-retention-list">
+                  {retention.repeat_drivers.map((d, i) => (
+                    <li key={i} className="rc-retention-item rc-retention-repeat">{d}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Churn reasons */}
+            {(retention.churn_reasons || []).length > 0 && (
+              <div className="rc-retention-col">
+                <div className="rc-retention-col-head rc-retention-churn-head">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M7 23 3 19l4-4" /><path d="M21 13v2a4 4 0 0 1-4 4H3" />
+                  </svg>
+                  Why customers stop returning
+                </div>
+                <ul className="rc-retention-list">
+                  {retention.churn_reasons.map((r, i) => (
+                    <li key={i} className="rc-retention-item rc-retention-churn">{r}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+
+          {/* Retention actions */}
+          {(retention.retention_actions || []).length > 0 && (
+            <div className="rc-retention-actions">
+              <p className="rc-retention-actions-label">Retention actions</p>
+              {retention.retention_actions.map((a, i) => {
+                const effort = EFFORT_STYLE[a.effort] || EFFORT_STYLE.medium;
+                return (
+                  <div key={i} className="rc-retention-action-row">
+                    <div className="rc-retention-action-body">
+                      <p className="rc-retention-action-text">{a.action}</p>
+                      <p className="rc-retention-action-impact">{a.impact}</p>
+                    </div>
+                    <span className="rc-quickwin-badge"
+                      style={{ background: effort.bg, color: effort.color, flexShrink: 0 }}>
+                      {effort.label}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Two-column insights */}
       <div className="rc-insights-grid">
-        {/* Customer Insights */}
         {customerInsights.length > 0 && (
           <div className="rc-insights-col">
             <div className="rc-col-head">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
                 stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" />
-                <path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                <circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" />
               </svg>
               <span className="rc-col-title">Customer Insights</span>
               <span className="rc-col-count">{customerInsights.length}</span>
@@ -1079,7 +1463,6 @@ export function ResearchCards({ research }) {
           </div>
         )}
 
-        {/* Competitor Insights */}
         {competitorInsights.length > 0 && (
           <div className="rc-insights-col">
             <div className="rc-col-head">
@@ -1134,10 +1517,25 @@ export function ResearchCards({ research }) {
   );
 }
 
+const EFFORT_BADGE = { low: "#16a34a", medium: "#d97706", high: "#dc2626" };
+
+const CHECKLIST_CATEGORY_ICON = {
+  "Online Presence": "🌐",
+  "Operations": "⚙️",
+  "Content": "✏️",
+  "Tools": "🔧",
+};
+
 export function RoadmapCards({ roadmap }) {
   if (!roadmap) return null;
   const weeks = roadmap.weekly_plan || [];
   const milestones = roadmap.milestones || [];
+  const commPlan = roadmap.communication_plan || [];
+  const checklist = roadmap.product_checklist || [];
+  const services = roadmap.service_recommendations || [];
+
+  const mustHave = checklist.filter((c) => c.priority === "must-have");
+  const niceToHave = checklist.filter((c) => c.priority === "nice-to-have");
 
   // Group weeks by phase
   const phaseOrder = [];
@@ -1152,63 +1550,223 @@ export function RoadmapCards({ roadmap }) {
 
   return (
     <div className="rm-wrap">
-      {/* Milestone tracker */}
-      {milestones.length > 0 && (
-        <div className="rm-milestones">
-          <p className="rm-milestones-title">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-              stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
-              style={{ display: "inline", marginRight: 6, verticalAlign: "middle" }}>
-              <polyline points="9 11 12 14 22 4" />
-              <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+
+      {/* Communication Plan */}
+      {commPlan.length > 0 && (
+        <div className="rm-section">
+          <div className="rm-section-header">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
             </svg>
-            Key Milestones
-          </p>
-          <div className="rm-milestones-track">
-            {milestones.map((m, i) => (
-              <div key={i} className="rm-milestone">
-                <div className="rm-milestone-dot" />
-                {i < milestones.length - 1 && <div className="rm-milestone-line" />}
-                <div className="rm-milestone-body">
-                  <span className="rm-milestone-day">Day {m.day}</span>
-                  <p className="rm-milestone-goal">{m.goal}</p>
+            <h4 className="rm-section-title">Communication Plan</h4>
+            <span className="rm-section-sub">Channel-by-channel messaging cadence across 90 days</span>
+          </div>
+          <div className="rm-comm-grid">
+            {commPlan.map((ch, i) => (
+              <div key={i} className="rm-comm-card">
+                <div className="rm-comm-channel-head">
+                  <span className="rm-comm-channel-name">{ch.channel}</span>
+                  <span className="rm-comm-freq">{ch.frequency}</span>
                 </div>
+                <div className="rm-comm-phases">
+                  <div className="rm-comm-phase-row">
+                    <span className="rm-comm-phase-badge rm-comm-phase-1">Month 1</span>
+                    <p className="rm-comm-phase-text">{ch.phase_1_theme}</p>
+                  </div>
+                  <div className="rm-comm-phase-row">
+                    <span className="rm-comm-phase-badge rm-comm-phase-2">Month 2</span>
+                    <p className="rm-comm-phase-text">{ch.phase_2_theme}</p>
+                  </div>
+                  <div className="rm-comm-phase-row">
+                    <span className="rm-comm-phase-badge rm-comm-phase-3">Month 3</span>
+                    <p className="rm-comm-phase-text">{ch.phase_3_theme}</p>
+                  </div>
+                </div>
+                {ch.example_message && (
+                  <div className="rm-comm-example">
+                    <span className="rm-comm-example-label">Example</span>
+                    <p className="rm-comm-example-text">"{ch.example_message}"</p>
+                  </div>
+                )}
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* Phase sections */}
-      {phaseOrder.map((phaseName, pi) => (
-        <div key={phaseName} className="rm-phase">
-          <div className="rm-phase-header" style={{ borderLeftColor: PHASE_COLORS[pi % PHASE_COLORS.length] }}>
-            <span className="rm-phase-num" style={{ background: PHASE_COLORS[pi % PHASE_COLORS.length] }}>
-              {pi + 1}
-            </span>
-            <h4 className="rm-phase-name">{phaseName}</h4>
-            <span className="rm-phase-weeks-count">{phaseMap[phaseName].length} weeks</span>
+      {/* Product Checklist */}
+      {checklist.length > 0 && (
+        <div className="rm-section">
+          <div className="rm-section-header">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="9 11 12 14 22 4" />
+              <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+            </svg>
+            <h4 className="rm-section-title">Pre-Launch Product Checklist</h4>
+            <span className="rm-section-sub">Complete these before spending on marketing</span>
           </div>
-          <div className="rm-weeks-grid">
-            {phaseMap[phaseName].map((w) => (
-              <div key={w.week} className="rm-week-card">
-                <div className="rm-week-head">
-                  <span className="rm-week-label">Week {w.week}</span>
-                  {w.kpi && <span className="rm-week-kpi">{w.kpi}</span>}
+          {mustHave.length > 0 && (
+            <div className="rm-checklist-group">
+              <p className="rm-checklist-group-label rm-must-label">Must-Have</p>
+              {mustHave.map((item, i) => (
+                <div key={i} className="rm-checklist-item">
+                  <div className="rm-checklist-checkbox" />
+                  <div className="rm-checklist-body">
+                    <div className="rm-checklist-top">
+                      <span className="rm-checklist-cat-icon">{CHECKLIST_CATEGORY_ICON[item.category] || "📌"}</span>
+                      <span className="rm-checklist-cat">{item.category}</span>
+                      <p className="rm-checklist-text">{item.item}</p>
+                    </div>
+                    {item.why_it_matters && (
+                      <p className="rm-checklist-why">{item.why_it_matters}</p>
+                    )}
+                  </div>
                 </div>
-                <p className="rm-week-objective">{w.objective}</p>
-                {(w.daily_actions || []).length > 0 && (
-                  <ul className="rm-week-actions">
-                    {w.daily_actions.slice(0, 3).map((a, i) => (
-                      <li key={i}>{a}</li>
-                    ))}
-                  </ul>
+              ))}
+            </div>
+          )}
+          {niceToHave.length > 0 && (
+            <div className="rm-checklist-group">
+              <p className="rm-checklist-group-label rm-nice-label">Nice-to-Have</p>
+              {niceToHave.map((item, i) => (
+                <div key={i} className="rm-checklist-item rm-checklist-nice">
+                  <div className="rm-checklist-checkbox rm-checklist-checkbox-nice" />
+                  <div className="rm-checklist-body">
+                    <div className="rm-checklist-top">
+                      <span className="rm-checklist-cat-icon">{CHECKLIST_CATEGORY_ICON[item.category] || "📌"}</span>
+                      <span className="rm-checklist-cat">{item.category}</span>
+                      <p className="rm-checklist-text">{item.item}</p>
+                    </div>
+                    {item.why_it_matters && (
+                      <p className="rm-checklist-why">{item.why_it_matters}</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Service Recommendations */}
+      {services.length > 0 && (
+        <div className="rm-section">
+          <div className="rm-section-header">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="16" />
+              <line x1="8" y1="12" x2="16" y2="12" />
+            </svg>
+            <h4 className="rm-section-title">Service Expansion Opportunities</h4>
+            <span className="rm-section-sub">Services worth adding based on competitor gaps and market demand</span>
+          </div>
+          <div className="rm-service-grid">
+            {services.map((s, i) => (
+              <div key={i} className="rm-service-card">
+                <div className="rm-service-head">
+                  <span className="rm-service-name">{s.service}</span>
+                  <div className="rm-service-badges">
+                    <span className="rm-service-effort" style={{ background: EFFORT_BADGE[s.effort] || "#64748b" }}>
+                      {(s.effort || "medium").toUpperCase()} EFFORT
+                    </span>
+                    {s.competitors_offering && (
+                      <span className="rm-service-comp-badge">Competitors offer this</span>
+                    )}
+                  </div>
+                </div>
+                <p className="rm-service-rationale">{s.rationale}</p>
+                {s.revenue_impact && (
+                  <div className="rm-service-impact">
+                    <span className="rm-service-impact-label">Revenue impact</span>
+                    <span className="rm-service-impact-text">{s.revenue_impact}</span>
+                  </div>
                 )}
               </div>
             ))}
           </div>
         </div>
-      ))}
+      )}
+
+      {/* 90-Day Execution Roadmap */}
+      {weeks.length > 0 && (
+        <div className="rm-section">
+          <div className="rm-section-header">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <polyline points="12 6 12 12 16 14" />
+            </svg>
+            <h4 className="rm-section-title">90-Day Execution Roadmap</h4>
+            <span className="rm-section-sub">Week-by-week tasks and KPIs across all 3 phases</span>
+          </div>
+
+          {/* Phase bar */}
+          <div className="rm-exec-phasebar">
+            {phaseOrder.map((phaseName, pi) => {
+              const pWeeks = phaseMap[phaseName];
+              const widthPct = (pWeeks.length / weeks.length) * 100;
+              return (
+                <div
+                  key={phaseName}
+                  className="rm-exec-phasebar-seg"
+                  style={{ width: `${widthPct}%`, background: PHASE_COLORS[pi % PHASE_COLORS.length] }}
+                >
+                  <span className="rm-exec-phasebar-name">{phaseName}</span>
+                  <span className="rm-exec-phasebar-range">
+                    Wk {pWeeks[0].week}–{pWeeks[pWeeks.length - 1].week}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Milestone chips */}
+          {milestones.length > 0 && (
+            <div className="rm-exec-milestone-row">
+              {milestones.map((m, i) => (
+                <div key={i} className="rm-exec-milestone-chip">
+                  <span className="rm-exec-milestone-day">Day {m.day}</span>
+                  <span className="rm-exec-milestone-goal">{m.goal}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Phase blocks with week cards */}
+          {phaseOrder.map((phaseName, pi) => (
+            <div key={phaseName} className="rm-phase">
+              <div className="rm-phase-header" style={{ borderLeftColor: PHASE_COLORS[pi % PHASE_COLORS.length] }}>
+                <span className="rm-phase-num" style={{ background: PHASE_COLORS[pi % PHASE_COLORS.length] }}>
+                  {pi + 1}
+                </span>
+                <h4 className="rm-phase-name">{phaseName}</h4>
+                <span className="rm-phase-weeks-count">{phaseMap[phaseName].length} weeks</span>
+              </div>
+              <div className="rm-weeks-grid">
+                {phaseMap[phaseName].map((w) => (
+                  <div key={w.week} className="rm-week-card">
+                    <div className="rm-week-head">
+                      <span className="rm-week-label">Week {w.week}</span>
+                      {w.kpi && <span className="rm-week-kpi">{w.kpi}</span>}
+                    </div>
+                    <p className="rm-week-objective">{w.objective}</p>
+                    {(w.tasks || []).length > 0 && (
+                      <ul className="rm-week-actions">
+                        {w.tasks.slice(0, 3).map((a, i) => (
+                          <li key={i}>{a}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

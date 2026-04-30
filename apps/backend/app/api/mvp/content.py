@@ -4,13 +4,16 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.auth import get_current_user
+from app.core.response_cache import get_cached, make_cache_key, set_cached
 from app.db import get_db
 from app.models import (
+    AnalysisReport,
     MediaAsset,
+    PersonaProfile,
     RoadmapPlan,
     User,
 )
-from app.services.content_studio import generate_content_assets
+from app.services.content_studio import generate_content_assets, suggest_tone
 
 from app.api.mvp.deps import (
     ContentGenerationRequest,
@@ -119,3 +122,49 @@ def get_content_asset(
         "project_id": row.project_id,
         **_serialize_asset_row(row),
     }
+
+
+@router.get("/content/suggest-tone/{project_id}")
+def suggest_tone_contract(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    project = _owned_project_or_404(db, current_user, project_id)
+
+    persona_rows = (
+        db.query(PersonaProfile)
+        .filter(PersonaProfile.project_id == project_id)
+        .order_by(PersonaProfile.id.asc())
+        .all()
+    )
+    if not persona_rows:
+        raise HTTPException(
+            status_code=404,
+            detail="No personas found. Run /api/mvp/personas/generate first.",
+        )
+
+    personas = [json.loads(row.persona_json) for row in persona_rows]
+
+    research_row = (
+        db.query(AnalysisReport)
+        .filter(AnalysisReport.project_id == project_id)
+        .order_by(AnalysisReport.id.desc())
+        .first()
+    )
+    research = json.loads(research_row.report_json) if research_row else None
+
+    cache_key = make_cache_key("tone_suggester", {
+        "persona_ids": sorted([r.id for r in persona_rows]),
+        "research_id": research_row.id if research_row else None,
+    })
+    result = get_cached(db, cache_key, ttl_hours=24)
+    if result is None:
+        result = suggest_tone(
+            project_name=project.name,
+            personas=personas,
+            research=research,
+        )
+        set_cached(db, cache_key, agent="tone_suggester", payload=result)
+
+    return result

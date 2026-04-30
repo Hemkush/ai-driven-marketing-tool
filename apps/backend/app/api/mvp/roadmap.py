@@ -7,7 +7,7 @@ from app.core.auth import get_current_user
 from app.core.pipeline_tracer import trace_step
 from app.core.response_cache import get_cached, make_cache_key, set_cached
 from app.db import get_db
-from app.models import PersonaProfile, RoadmapPlan, User
+from app.models import AnalysisReport, PersonaProfile, RoadmapPlan, User
 from app.services.roadmap_planner import generate_roadmap_plan
 
 from app.api.mvp.deps import (
@@ -46,8 +46,18 @@ def generate_roadmap_contract(
         )
 
     personas = [json.loads(row.persona_json) for row in persona_rows]
+
+    analysis_row = (
+        db.query(AnalysisReport)
+        .filter(AnalysisReport.project_id == business_profile_id)
+        .order_by(AnalysisReport.id.desc())
+        .first()
+    )
+    analysis_report = json.loads(analysis_row.report_json) if analysis_row else None
+
     cache_key = make_cache_key("roadmap_planner", {
         "persona_ids": sorted([r.id for r in persona_rows]),
+        "analysis_report_id": analysis_row.id if analysis_row else None,
     })
     roadmap_payload = get_cached(db, cache_key, ttl_hours=12)
     if roadmap_payload is None:
@@ -55,8 +65,10 @@ def generate_roadmap_contract(
             roadmap_payload = generate_roadmap_plan(
                 project_name=project.name,
                 personas=personas,
+                analysis_report=analysis_report,
             )
-        set_cached(db, cache_key, agent="roadmap_planner", payload=roadmap_payload)
+        if not roadmap_payload.get("_is_fallback"):
+            set_cached(db, cache_key, agent="roadmap_planner", payload=roadmap_payload)
 
     quality_score = score_roadmap(roadmap_payload)
     _quality_gate(quality_score, agent="roadmap_planner")

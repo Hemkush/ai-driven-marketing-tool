@@ -7,8 +7,38 @@ import { WhyThis } from "../components/WhyThis";
 import { AiChip } from "../components/AiChip";
 import { FeedbackThumbs } from "../components/FeedbackThumbs";
 
+function FocusInput({ value, onChange, onRun, busy, hasResearch }) {
+  return (
+    <div className="rsp-focus-card">
+      <p className="rsp-focus-label">
+        {hasResearch ? "Refocus the research" : "Optional: focus this research"}
+      </p>
+      <div className="rsp-focus-row">
+        <textarea
+          className="rsp-focus-textarea"
+          placeholder="e.g. Focus on Instagram marketing, or dig into the premium customer segment…"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          rows={2}
+        />
+        <button
+          className="btn rsp-focus-btn"
+          onClick={onRun}
+          disabled={busy}
+        >
+          {busy
+            ? "Running…"
+            : hasResearch
+            ? value.trim() ? "Re-run with Focus →" : "Re-run Research →"
+            : value.trim() ? "Run with Focus →" : "Run Research →"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function ResearchPage({ workflow }) {
-  const { state, actions } = workflow;
+  const { state, set, actions } = workflow;
   const navigate = useNavigate();
   const hasResearch = !!state.research;
   const hasPersonas = state.personas?.length > 0;
@@ -38,8 +68,9 @@ export default function ResearchPage({ workflow }) {
           </div>
           <h2 className="rsp-gate-title">No Market Research Yet</h2>
           <p className="rsp-gate-sub">
-            Deep market research uncovers evidence-backed customer insights, emerging trends,
-            and untapped opportunities — giving your strategy a competitive edge grounded in data.
+            Deep market research uncovers evidence-backed customer insights, buying journeys per
+            persona, quick wins, and untapped opportunities — giving your strategy a competitive
+            edge grounded in data.
           </p>
           <div className="rsp-gate-steps">
             <div className="rsp-gate-step">
@@ -49,7 +80,9 @@ export default function ResearchPage({ workflow }) {
               <div className="rsp-step-body">
                 <p className="rsp-step-title">Buyer Personas</p>
                 <p className="rsp-step-sub">
-                  {hasPersonas ? "Complete" : "Generate personas from the Personas page first"}
+                  {hasPersonas
+                    ? `Complete — ${state.personas.length} persona${state.personas.length !== 1 ? "s" : ""} will be used to personalise research`
+                    : "Generate personas from the Personas page first"}
                 </p>
               </div>
             </div>
@@ -57,17 +90,19 @@ export default function ResearchPage({ workflow }) {
               <span className="rsp-step-badge">2</span>
               <div className="rsp-step-body">
                 <p className="rsp-step-title">Run Deep Research</p>
-                <p className="rsp-step-sub">AI scans for customer trends and market gaps — ~30 seconds</p>
+                <p className="rsp-step-sub">
+                  AI produces buying journeys per persona, quick wins, and market insights — ~30 seconds
+                </p>
               </div>
             </div>
           </div>
-          <button
-            className="btn rsp-gate-cta"
-            onClick={actions.runResearch}
-            disabled={state.busy || !state.activeProjectId}
-          >
-            Run Market Research →
-          </button>
+          <FocusInput
+            value={state.researchFocus}
+            onChange={set.setResearchFocus}
+            onRun={actions.runResearch}
+            busy={state.busy}
+            hasResearch={false}
+          />
         </div>
         <NextStepCta to="/roadmap" label="Next: Roadmap" disabled={true} />
       </div>
@@ -81,17 +116,10 @@ export default function ResearchPage({ workflow }) {
         <div className="rsp-header-text">
           <h3 className="rsp-title">Market Research</h3>
           <p className="rsp-desc">
-            Evidence-backed customer insights and market opportunities, researched specifically for
-            your business type, location, and target audience.
+            Evidence-backed customer insights, per-persona buying journeys, and actionable
+            quick wins — researched specifically for your business type, location, and audience.
           </p>
         </div>
-        <button
-          className="btn"
-          onClick={actions.runResearch}
-          disabled={state.busy || !state.activeProjectId}
-        >
-          {hasResearch ? "Re-run Research" : "Run Market Research"}
-        </button>
       </div>
 
       {/* Gate error */}
@@ -105,6 +133,15 @@ export default function ResearchPage({ workflow }) {
           </button>
         </div>
       )}
+
+      {/* Focus / re-run control */}
+      <FocusInput
+        value={state.researchFocus}
+        onChange={set.setResearchFocus}
+        onRun={actions.runResearch}
+        busy={state.busy}
+        hasResearch={hasResearch}
+      />
 
       {state.busy && (
         <LoadingSkeleton lines={5} message="Running deep market research…" />

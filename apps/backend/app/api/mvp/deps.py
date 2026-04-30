@@ -80,6 +80,19 @@ class PositioningRefineRequest(BaseModel):
     owner_feedback: str = Field(min_length=1, max_length=5000)
 
 
+class PersonasGenerateRequest(BaseModel):
+    business_profile_id: int | None = None
+    project_id: int | None = None
+    owner_feedback: str | None = Field(default=None, max_length=2000)
+
+
+class ResearchRunRequest(BaseModel):
+    business_profile_id: int | None = None
+    project_id: int | None = None
+    focus_area: str | None = Field(default=None, max_length=1000)
+    force_refresh: bool = Field(default=False)
+
+
 class ContentGenerationRequest(BaseModel):
     business_profile_id: int | None = None
     project_id: int | None = None

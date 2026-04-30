@@ -88,11 +88,20 @@ export const pipelineClient = {
     const params = sessionId ? { session_id: sessionId } : {};
     return api.get(`/mvp/positioning/${businessProfileId}`, { params }).then((r) => r.data.items || []);
   },
-  runResearch: (businessProfileId) =>
-    api.post("/mvp/research/run", { business_profile_id: businessProfileId }).then((r) => r.data),
-  generatePersonas: (businessProfileId) =>
+  runResearch: (businessProfileId, focusArea) =>
     api
-      .post("/mvp/personas/generate", { business_profile_id: businessProfileId })
+      .post("/mvp/research/run", {
+        business_profile_id: businessProfileId,
+        force_refresh: true,
+        ...(focusArea ? { focus_area: focusArea } : {}),
+      })
+      .then((r) => r.data),
+  generatePersonas: (businessProfileId, ownerFeedback) =>
+    api
+      .post("/mvp/personas/generate", {
+        business_profile_id: businessProfileId,
+        ...(ownerFeedback ? { owner_feedback: ownerFeedback } : {}),
+      })
       .then((r) => r.data),
   generateRoadmap: (businessProfileId) =>
     api
@@ -104,6 +113,8 @@ export const contentClient = {
   generate: (payload) => api.post("/mvp/content/generate", payload).then((r) => r.data),
   listByProject: (businessProfileId) =>
     api.get(`/mvp/content/assets/${businessProfileId}`).then((r) => r.data.items || []),
+  suggestTone: (businessProfileId) =>
+    api.get(`/mvp/content/suggest-tone/${businessProfileId}`).then((r) => r.data),
 };
 
 export const submitFeedback = (payload) =>

@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { NextStepCta } from "../components/UiBlocks";
 import { ContentAssetCards } from "../components/CompactCards";
@@ -50,6 +51,16 @@ export default function ContentPage({ workflow }) {
   const navigate = useNavigate();
   const hasAssets = state.contentAssets?.length > 0;
   const hasRoadmap = !!state.roadmap;
+
+  useEffect(() => {
+    if (state.activeProjectId && !state.toneSuggestion) {
+      actions.fetchToneSuggestion();
+    }
+  }, [state.activeProjectId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const suggestionActive =
+    state.toneSuggestion &&
+    state.assetTone === state.toneSuggestion.suggested_tone;
 
   const selectedCategory = ASSET_CATEGORIES.find((c) =>
     c.types.some((t) => t.value === state.assetType)
@@ -121,6 +132,42 @@ export default function ContentPage({ workflow }) {
         {/* Tone selector */}
         <div className="csp-field">
           <label className="csp-label">Brand Tone</label>
+
+          {/* AI suggestion banner */}
+          {state.toneSuggestion && (
+            <div className={`csp-tone-suggestion${suggestionActive ? "" : " csp-tone-overridden"}`}>
+              <div className="csp-tone-sug-head">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z" />
+                </svg>
+                <span>AI Recommendation</span>
+                {!suggestionActive && (
+                  <span className="csp-tone-sug-override-pill">
+                    Override active
+                  </span>
+                )}
+              </div>
+              <p className="csp-tone-sug-body">
+                <strong className="csp-tone-sug-name">
+                  {state.toneSuggestion.suggested_tone.charAt(0).toUpperCase() +
+                    state.toneSuggestion.suggested_tone.slice(1)}
+                </strong>{" "}
+                tone is recommended for your business.
+              </p>
+              {state.toneSuggestion.reasoning && (
+                <p className="csp-tone-sug-reason">{state.toneSuggestion.reasoning}</p>
+              )}
+              {!suggestionActive && (
+                <button
+                  className="csp-tone-sug-reapply"
+                  onClick={() => set.setAssetTone(state.toneSuggestion.suggested_tone)}
+                >
+                  Use recommended tone
+                </button>
+              )}
+            </div>
+          )}
+
           <div className="csp-tone-row">
             {TONES.map((t) => (
               <button
@@ -130,6 +177,11 @@ export default function ContentPage({ workflow }) {
                 title={t.desc}
               >
                 {t.label}
+                {state.toneSuggestion?.suggested_tone === t.value && (
+                  <svg className="csp-tone-star" width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z" />
+                  </svg>
+                )}
               </button>
             ))}
           </div>

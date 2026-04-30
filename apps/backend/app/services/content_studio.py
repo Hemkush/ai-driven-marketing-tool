@@ -316,3 +316,81 @@ def generate_content_assets(
         return assets
     except Exception:
         return _fallback_assets(project_name, normalized, prompt_text, num_variants)
+
+
+# ── Tone suggestion ────────────────────────────────────────────────────────────
+
+_VALID_TONES = list(TONE_DESCRIPTIONS.keys())
+
+
+def _fallback_tone(project_name: str) -> dict:
+    return {
+        "suggested_tone": "friendly",
+        "reasoning": (
+            f"A friendly, warm tone works well for most local service businesses like {project_name} — "
+            "it builds trust and encourages customers to reach out without feeling pressured."
+        ),
+    }
+
+
+def suggest_tone(
+    project_name: str,
+    personas: list[dict],
+    research: dict | None = None,
+) -> dict:
+    if not settings.can_use_openai() or not personas:
+        return _fallback_tone(project_name)
+
+    persona_lines = []
+    for p in personas[:3]:
+        psych = p.get("psychographic_profile", {})
+        eng = p.get("engagement_strategy", {})
+        persona_lines.append(
+            f"- {p.get('name', 'Persona')}: "
+            f"goals={str(psych.get('goals_and_motivations', ''))[:100]}, "
+            f"channels={', '.join(eng.get('preferred_channels') or [])}"
+        )
+
+    research_snippet = ""
+    if research:
+        insights = research.get("target_customer_insights") or []
+        research_snippet = " | ".join(i.get("insight", "") for i in insights[:2])[:250]
+
+    prompt = (
+        f"You are a brand strategist. Choose the single best brand tone for this business "
+        f"from this exact list: {', '.join(_VALID_TONES)}.\n\n"
+        f"Business: {project_name}\n"
+        f"Customer personas:\n" + "\n".join(persona_lines)
+        + (f"\nKey research insight: {research_snippet}" if research_snippet else "")
+        + "\n\nReturn strict JSON only: "
+        '{"suggested_tone": "<one tone from the list>", '
+        '"reasoning": "<1-2 sentences: why this tone fits this specific business and its customers>"}'
+    )
+
+    try:
+        client = OpenAI(
+            api_key=settings.openai_api_key,
+            base_url=settings.openai_base_url,
+            timeout=30,
+            max_retries=0,
+        )
+        resp = tracked_chat(
+            client,
+            agent="tone_suggester",
+            model=settings.openai_model,
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"},
+            temperature=0.3,
+        )
+        raw = resp.choices[0].message.content.strip()
+        parsed = json.loads(raw)
+        tone = parsed.get("suggested_tone", "").lower().strip()
+        if tone not in _VALID_TONES:
+            tone = "friendly"
+        return {
+            "suggested_tone": tone,
+            "reasoning": parsed.get("reasoning", ""),
+        }
+    except Exception:
+        logger.exception("tone_suggester_error")
+        return _fallback_tone(project_name)

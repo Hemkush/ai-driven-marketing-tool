@@ -207,7 +207,7 @@ function AuthModal({ workflow, onClose }) {
           {createMode && (
             <>
               <label className="lp-modal-label">Company / Organisation</label>
-              <input className="lp-modal-input" placeholder="Company name (optional)"
+              <input className="lp-modal-input" placeholder="Company or organization name"
                 value={state.companyName} onChange={(e) => set.setCompanyName(e.target.value)} />
             </>
           )}

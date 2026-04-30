@@ -198,6 +198,7 @@ export default function ProjectPanel({
   const workflowProgress = selectedProjectSessionWorkflow?.progress || {};
   const conversationAnalysis = workflowSnapshot.conversation_analysis;
   const recentSessions = (projectSessions || []).slice(0, 4);
+  const stepsTotal = Object.keys(workflowProgress).length || 8;
   const stepsComplete = Object.values(workflowProgress).filter(Boolean).length;
 
   return (
@@ -331,7 +332,7 @@ export default function ProjectPanel({
                 </div>
                 <div className="pp-snapshot-stat">
                   <span className="pp-snapshot-stat-val">
-                    {stepsComplete === 0 ? "—" : `${Math.round((stepsComplete / 9) * 100)}%`}
+                    {stepsComplete === 0 ? "—" : `${Math.round((stepsComplete / stepsTotal) * 100)}%`}
                   </span>
                   <span className="pp-snapshot-stat-label">Complete</span>
                 </div>

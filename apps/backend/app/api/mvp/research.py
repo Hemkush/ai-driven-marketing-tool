@@ -5,8 +5,10 @@ from sqlalchemy.orm import Session
 
 from app.core.auth import get_current_user
 from app.core.pipeline_tracer import trace_step
+from app.core.response_cache import get_cached, make_cache_key, set_cached
 from app.db import get_db
 from app.models import (
+    PersonaProfile,
     QuestionnaireResponse,
     QuestionnaireSession,
     ResearchReport,
@@ -15,7 +17,7 @@ from app.models import (
 from app.services.market_researcher import generate_research_report
 
 from app.api.mvp.deps import (
-    ProjectScopedRequest,
+    ResearchRunRequest,
     _resolve_business_profile_id,
     _owned_project_or_404,
     _latest_analysis_or_404,
@@ -29,7 +31,7 @@ router = APIRouter(prefix="/api/mvp", tags=["research"])
 
 @router.post("/research/run", status_code=status.HTTP_201_CREATED)
 def run_research_contract(
-    payload: ProjectScopedRequest,
+    payload: ResearchRunRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -37,7 +39,7 @@ def run_research_contract(
         payload.business_profile_id, payload.project_id
     )
     project = _owned_project_or_404(db, current_user, business_profile_id)
-    analysis_report = _latest_analysis_or_404(db, business_profile_id)
+    analysis_row = _latest_analysis_or_404(db, business_profile_id)
 
     sessions = (
         db.query(QuestionnaireSession)
@@ -67,13 +69,41 @@ def run_research_contract(
         }
         for r in responses
     ]
-    with trace_step(db, step="market_researcher", project_id=business_profile_id):
-        research_payload = generate_research_report(
-            project_name=project.name,
-            questionnaire_responses=response_payload,
-            analysis_report=json.loads(analysis_report.report_json),
-            business_address=project.business_address,
-        )
+
+    # Fetch latest personas so research can personalise buying journeys per segment
+    persona_rows = (
+        db.query(PersonaProfile)
+        .filter(PersonaProfile.project_id == business_profile_id)
+        .order_by(PersonaProfile.id.asc())
+        .all()
+    )
+    personas_payload = []
+    for row in persona_rows:
+        try:
+            personas_payload.append(json.loads(row.persona_json))
+        except Exception:
+            pass
+
+    focus_area = (payload.focus_area or "").strip()
+
+    cache_key = make_cache_key("market_researcher", {
+        "analysis_report_id": analysis_row.id,
+        "persona_ids": [r.id for r in persona_rows],
+        "focus_area": focus_area,
+    })
+    research_payload = None if payload.force_refresh else get_cached(db, cache_key, ttl_hours=6)
+    if research_payload is None:
+        with trace_step(db, step="market_researcher", project_id=business_profile_id):
+            research_payload = generate_research_report(
+                project_name=project.name,
+                questionnaire_responses=response_payload,
+                analysis_report=json.loads(analysis_row.report_json),
+                business_address=project.business_address,
+                personas=personas_payload,
+                focus_area=focus_area or None,
+            )
+        if not research_payload.get("_is_fallback"):
+            set_cached(db, cache_key, agent="market_researcher", payload=research_payload)
 
     quality_score = score_output(
         agent="market_researcher",
@@ -86,7 +116,7 @@ def run_research_contract(
 
     report = ResearchReport(
         project_id=business_profile_id,
-        source_session_id=analysis_report.source_session_id,
+        source_session_id=analysis_row.source_session_id,
         status="ready",
         report_json=json.dumps(research_payload),
         quality_score=quality_score,
