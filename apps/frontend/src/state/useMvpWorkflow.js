@@ -49,13 +49,16 @@ export function useMvpWorkflow() {
   const [personaGenerationContext, setPersonaGenerationContext] = useState(null);
   const [roadmap, setRoadmap] = useState(null);
   const [contentAssets, setContentAssets] = useState([]);
-  const [prefetch, setPrefetch] = useState({ positioning: false, personas: false });
+  const [prefetch, setPrefetch] = useState({ positioning: false, personas: false, research: false, roadmap: false });
   const [gateError, setGateError] = useState(null);
   const [assetType, setAssetType] = useState("social_post");
   const [assetPrompt, setAssetPrompt] = useState("Create premium launch-week content.");
   const [numVariants, setNumVariants] = useState(3);
   const [assetTone, setAssetTone] = useState("professional");
   const [toneSuggestion, setToneSuggestion] = useState(null);
+  const [streamProgress, setStreamProgress] = useState([]);
+  const [contentStreamProgress, setContentStreamProgress] = useState([]);
+  const [milestone, setMilestone] = useState(null);
 
   const activeProject = useMemo(
     () => projects.find((p) => String(p.id) === String(activeProjectId)) || null,
@@ -233,7 +236,7 @@ export function useMvpWorkflow() {
       setRoadmap(null);
       setContentAssets([]);
       setAssetTone("professional");
-      setPrefetch({ positioning: false, personas: false });
+      setPrefetch({ positioning: false, personas: false, research: false, roadmap: false });
       setMsg("Logged out.");
     },
 
@@ -253,6 +256,9 @@ export function useMvpWorkflow() {
 
     createProject: async () =>
       run(async () => {
+        if (!projectBusinessAddress || !/\b\d{5}\b/.test(projectBusinessAddress)) {
+          throw new Error("Operating Location is required and must include a ZIP code (e.g. College Park, MD 20740).");
+        }
         const data = await projectClient.create({
           name: projectName,
           description: projectDescription || null,
@@ -492,8 +498,31 @@ export function useMvpWorkflow() {
           .filter(Boolean)
           .slice(-6)
           .join("\n");
-        const data = await pipelineClient.runAnalysis(projectId, assistantContext);
-        setAnalysis({ ...data.report, quality_score: data.quality_score });
+
+        setStreamProgress([]);
+
+        await new Promise((resolve, reject) => {
+          pipelineClient.runAnalysisStream(projectId, assistantContext, {
+            onStep: ({ message, step, total }) => {
+              setStreamProgress((prev) => {
+                const updated = prev.length > 0
+                  ? prev.map((s, i) => (i === prev.length - 1 ? { ...s, done: true } : s))
+                  : prev;
+                return [...updated, { message, step, total, done: false }];
+              });
+            },
+            onComplete: ({ result, quality_score }) => {
+              setStreamProgress((prev) => prev.map((s) => ({ ...s, done: true })));
+              setAnalysis((prev) => {
+                if (!prev) setMilestone("analysis");
+                return { ...result, quality_score };
+              });
+              resolve({ result, quality_score });
+            },
+            onError: reject,
+          }).catch(reject);
+        });
+
         await refreshSelectedSessionWorkflow();
         setMsg(
           assistantContext
@@ -501,19 +530,38 @@ export function useMvpWorkflow() {
             : "Analysis generated."
         );
 
-        // Background-prefetch positioning + personas so those pages feel instant
-        _bgFetch("positioning", () =>
-          pipelineClient.generatePositioning(projectId).then((d) => {
-            setPositioning(d.positioning);
-            setPositioningHistory((prev) => [d.positioning, ...prev]);
-          })
-        );
-        _bgFetch("personas", () =>
-          pipelineClient.generatePersonas(projectId).then((d) => {
-            setPersonas(d.personas || []);
-          })
-        );
-      }, "Generating analysis..."),
+        // Background pipeline chain — runs entirely after busy=false so UI is unblocked
+        // Stage 1: Positioning + Personas in parallel
+        // Stage 2: Research (needs personas)
+        // Stage 3: Roadmap (needs research)
+        (async () => {
+          setPrefetch((p) => ({ ...p, positioning: true, personas: true }));
+          await Promise.all([
+            pipelineClient.generatePositioning(projectId)
+              .then((d) => {
+                setPositioning(d.positioning);
+                setPositioningHistory((prev) => [d.positioning, ...prev]);
+              })
+              .catch(() => {}),
+            pipelineClient.generatePersonas(projectId)
+              .then((d) => setPersonas(d.personas || []))
+              .catch(() => {}),
+          ]);
+          setPrefetch((p) => ({ ...p, positioning: false, personas: false }));
+
+          setPrefetch((p) => ({ ...p, research: true }));
+          await pipelineClient.runResearch(projectId)
+            .then((d) => setResearch({ ...d.report, quality_score: d.quality_score }))
+            .catch(() => {});
+          setPrefetch((p) => ({ ...p, research: false }));
+
+          setPrefetch((p) => ({ ...p, roadmap: true }));
+          await pipelineClient.generateRoadmap(projectId)
+            .then((d) => setRoadmap({ ...d.roadmap, quality_score: d.quality_score }))
+            .catch(() => {});
+          setPrefetch((p) => ({ ...p, roadmap: false }));
+        })();
+      }, "Scanning your local market..."),
 
     askAnalysisAssistant: async (overrideMessage = "") =>
       (async () => {
@@ -570,7 +618,8 @@ export function useMvpWorkflow() {
 
     generatePositioning: async () =>
       run(async () => {
-        const data = await pipelineClient.generatePositioning(Number(activeProjectId));
+        const projectId = Number(activeProjectId);
+        const data = await pipelineClient.generatePositioning(projectId);
         setPositioning(data.positioning);
         setPositioningHistory((prev) => [data.positioning, ...prev]);
         await refreshSelectedSessionWorkflow();
@@ -580,8 +629,9 @@ export function useMvpWorkflow() {
     refinePositioning: async () =>
       run(async () => {
         if (!positioningFeedback.trim()) throw new Error("Enter feedback first");
+        const projectId = Number(activeProjectId);
         const data = await pipelineClient.refinePositioning(
-          Number(activeProjectId),
+          projectId,
           positioningFeedback
         );
         setPositioning(data.positioning);
@@ -614,13 +664,16 @@ export function useMvpWorkflow() {
 
     generatePersonas: async () =>
       run(async () => {
+        const projectId = Number(activeProjectId);
+        const isFirst = personas.length === 0;
         const data = await pipelineClient.generatePersonas(
-          Number(activeProjectId),
+          projectId,
           personaFeedback.trim() || undefined
         );
         setPersonas(data.personas || []);
         setPersonaGenerationContext(data.generation_context || null);
         setPersonaFeedback("");
+        if (isFirst && (data.personas || []).length > 0) setMilestone("personas");
         await refreshSelectedSessionWorkflow();
         setMsg("Personas generated.");
       }, "Generating personas..."),
@@ -635,16 +688,32 @@ export function useMvpWorkflow() {
 
     generateContent: async () =>
       run(async () => {
-        const data = await contentClient.generate({
+        const payload = {
           business_profile_id: Number(activeProjectId),
           asset_type: assetType,
           prompt_text: assetPrompt,
           num_variants: Number(numVariants),
           tone: assetTone,
+        };
+        setContentStreamProgress([]);
+        await new Promise((resolve, reject) => {
+          contentClient.generateStream(payload, {
+            onStep: ({ message, step, total }) => {
+              setContentStreamProgress((prev) => {
+                const updated = prev.length > 0
+                  ? prev.map((s, i) => (i === prev.length - 1 ? { ...s, done: true } : s))
+                  : prev;
+                return [...updated, { message, step, total, done: false }];
+              });
+            },
+            onComplete: ({ assets }) => {
+              setContentStreamProgress((prev) => prev.map((s) => ({ ...s, done: true })));
+              setContentAssets((prev) => [...(assets || []), ...prev]);
+              resolve();
+            },
+            onError: reject,
+          }).catch(reject);
         });
-        // Prepend new assets so the latest always appears at the top.
-        // Existing assets from other types are kept — each type generates independently.
-        setContentAssets((prev) => [...(data.assets || []), ...prev]);
         await refreshSelectedSessionWorkflow();
         setMsg("Content assets generated.");
       }, "Generating content assets..."),
@@ -689,8 +758,10 @@ export function useMvpWorkflow() {
       setPersonaGenerationContext(null);
       setRoadmap(null);
       setContentAssets([]);
-      setPrefetch({ positioning: false, personas: false });
+      setPrefetch({ positioning: false, personas: false, research: false, roadmap: false });
     },
+
+    dismissMilestone: () => setMilestone(null),
   };
 
   return {
@@ -741,6 +812,9 @@ export function useMvpWorkflow() {
       numVariants,
       assetTone,
       toneSuggestion,
+      streamProgress,
+      contentStreamProgress,
+      milestone,
     },
     set: {
       setEmail,

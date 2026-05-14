@@ -1,0 +1,1 @@
+export { PersonaCards } from "../CompactCards";

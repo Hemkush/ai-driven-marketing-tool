@@ -1,0 +1,1 @@
+export { ResearchCards } from "../CompactCards";

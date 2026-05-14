@@ -107,10 +107,91 @@ export const pipelineClient = {
     api
       .post("/mvp/roadmap/generate", { business_profile_id: businessProfileId })
       .then((r) => r.data),
+
+  runAnalysisStream: (businessProfileId, additionalContext, { onStep, onComplete, onError } = {}) => {
+    const apiBase = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000/api";
+    const token = localStorage.getItem("access_token");
+    return fetch(`${apiBase}/mvp/analysis/run/stream`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({
+        business_profile_id: businessProfileId,
+        additional_context: additionalContext || null,
+      }),
+    }).then(async (response) => {
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.detail || `HTTP ${response.status}`);
+      }
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split("\n\n");
+        buffer = parts.pop() ?? "";
+        for (const chunk of parts) {
+          for (const line of chunk.split("\n")) {
+            if (!line.startsWith("data: ")) continue;
+            try {
+              const event = JSON.parse(line.slice(6));
+              if (event.type === "step") onStep?.(event);
+              else if (event.type === "complete") onComplete?.(event);
+              else if (event.type === "error") onError?.(new Error(event.message));
+            } catch { /* ignore malformed lines */ }
+          }
+        }
+      }
+    });
+  },
 };
 
 export const contentClient = {
   generate: (payload) => api.post("/mvp/content/generate", payload).then((r) => r.data),
+
+  generateStream: (payload, { onStep, onComplete, onError } = {}) => {
+    const apiBase = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000/api";
+    const token = localStorage.getItem("access_token");
+    return fetch(`${apiBase}/mvp/content/generate/stream`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(payload),
+    }).then(async (response) => {
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.detail || `HTTP ${response.status}`);
+      }
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split("\n\n");
+        buffer = parts.pop() ?? "";
+        for (const chunk of parts) {
+          for (const line of chunk.split("\n")) {
+            if (!line.startsWith("data: ")) continue;
+            try {
+              const event = JSON.parse(line.slice(6));
+              if (event.type === "step") onStep?.(event);
+              else if (event.type === "complete") onComplete?.(event);
+              else if (event.type === "error") onError?.(new Error(event.message));
+            } catch { /* ignore malformed lines */ }
+          }
+        }
+      }
+    });
+  },
   listByProject: (businessProfileId) =>
     api.get(`/mvp/content/assets/${businessProfileId}`).then((r) => r.data.items || []),
   suggestTone: (businessProfileId) =>

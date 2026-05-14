@@ -1,6 +1,8 @@
+import asyncio
 import json
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.core.auth import get_current_user
@@ -86,6 +88,121 @@ def generate_content_contract(
         "generated_count": len(rows),
         "assets": [_serialize_asset_row(r) for r in rows],
     }
+
+
+@router.post("/content/generate/stream")
+async def stream_content_contract(
+    payload: ContentGenerationRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Streaming version of /content/generate — emits SSE progress events per variant."""
+    business_profile_id = _resolve_business_profile_id(
+        payload.business_profile_id, payload.project_id
+    )
+    project = _owned_project_or_404(db, current_user, business_profile_id)
+    roadmap_row = (
+        db.query(RoadmapPlan)
+        .filter(RoadmapPlan.project_id == business_profile_id)
+        .order_by(RoadmapPlan.id.desc())
+        .first()
+    )
+    if not roadmap_row:
+        raise HTTPException(
+            status_code=404,
+            detail="No roadmap found. Run /api/mvp/roadmap/generate first.",
+        )
+
+    roadmap_data = json.loads(roadmap_row.plan_json)
+
+    async def event_stream():
+        def sse(data: dict) -> str:
+            return f"data: {json.dumps(data)}\n\n"
+
+        loop = asyncio.get_running_loop()
+        queue: asyncio.Queue = asyncio.Queue()
+        result_box: dict = {}
+
+        def on_step(message: str, step: int, total: int) -> None:
+            asyncio.run_coroutine_threadsafe(
+                queue.put({"type": "step", "message": message, "step": step, "total": total}),
+                loop,
+            )
+
+        def pipeline_task() -> None:
+            try:
+                result_box["result"] = generate_content_assets(
+                    project_name=project.name,
+                    roadmap=roadmap_data,
+                    strategy={},
+                    asset_type=payload.asset_type,
+                    prompt_text=payload.prompt_text,
+                    num_variants=payload.num_variants,
+                    tone=payload.tone,
+                    on_step=on_step,
+                )
+            except Exception as exc:
+                result_box["error"] = str(exc)
+            finally:
+                asyncio.run_coroutine_threadsafe(queue.put(None), loop)
+
+        future = loop.run_in_executor(None, pipeline_task)
+
+        while True:
+            item = await queue.get()
+            if item is None:
+                break
+            yield sse(item)
+
+        await asyncio.wrap_future(future)
+
+        if "error" in result_box:
+            yield sse({"type": "error", "message": result_box["error"]})
+            return
+
+        generated = result_box["result"]
+
+        try:
+            quality_score = score_content(generated)
+            _quality_gate(quality_score, agent="content_studio")
+        except HTTPException as exc:
+            detail = exc.detail
+            msg = (
+                detail if isinstance(detail, str)
+                else detail.get("message", str(detail)) if isinstance(detail, dict)
+                else str(detail)
+            )
+            yield sse({"type": "error", "message": msg})
+            return
+
+        rows = []
+        for item in generated:
+            row = MediaAsset(
+                project_id=business_profile_id,
+                source_session_id=roadmap_row.source_session_id,
+                asset_type=item["asset_type"],
+                prompt_text=payload.prompt_text,
+                storage_uri=item["storage_uri"],
+                metadata_json=json.dumps(item["metadata"]),
+                status=item.get("status", "ready"),
+                quality_score=quality_score,
+            )
+            db.add(row)
+            db.flush()
+            rows.append(row)
+        db.commit()
+
+        yield sse({
+            "type": "complete",
+            "assets": [_serialize_asset_row(r) for r in rows],
+            "quality_score": quality_score,
+        })
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.get("/content/assets/{project_id}")

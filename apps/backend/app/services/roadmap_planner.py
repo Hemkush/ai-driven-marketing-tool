@@ -11,7 +11,6 @@ logger = logging.getLogger(__name__)
 
 
 def _compact_analysis(analysis_report: dict) -> dict:
-    """Extract only the fields needed for service recommendations."""
     competitors = analysis_report.get("competitors") or []
     services = []
     for c in competitors[:6]:
@@ -21,6 +20,37 @@ def _compact_analysis(analysis_report: dict) -> dict:
         "market_overview": str(analysis_report.get("market_overview", ""))[:400],
         "competitor_services": list(set(services))[:20],
         "swot_opportunities": (analysis_report.get("swot_analysis") or {}).get("opportunities", [])[:4],
+    }
+
+
+def _compact_positioning(positioning: dict) -> dict:
+    return {
+        "target_segment": positioning.get("target_segment", "")[:200],
+        "positioning_statement": positioning.get("positioning_statement", positioning.get("statement_text", ""))[:300],
+        "tagline": positioning.get("tagline", ""),
+        "key_differentiators": positioning.get("key_differentiators", [])[:5],
+        "proof_points": positioning.get("proof_points", [])[:4],
+    }
+
+
+def _compact_research(research_report: dict) -> dict:
+    per_persona = [
+        {
+            "persona_name": p.get("persona_name", ""),
+            "buying_journey": p.get("buying_journey", {}),
+            "key_message": p.get("key_message", ""),
+            "best_channel": p.get("best_channel", ""),
+        }
+        for p in (research_report.get("per_persona_insights") or [])[:4]
+    ]
+    quick_wins = research_report.get("quick_wins", [])[:5]
+    customer_insights = [i.get("insight", "") for i in (research_report.get("target_customer_insights") or [])[:4]]
+    language_patterns = (research_report.get("voc_synthesis") or {}).get("language_patterns", [])[:8]
+    return {
+        "per_persona_insights": per_persona,
+        "quick_wins": quick_wins,
+        "customer_insights": customer_insights,
+        "language_patterns": language_patterns,
     }
 
 
@@ -157,16 +187,33 @@ def generate_roadmap_plan(
     project_name: str,
     personas: list[dict],
     analysis_report: dict | None = None,
+    positioning: dict | None = None,
+    research_report: dict | None = None,
 ) -> dict:
     if not settings.can_use_openai():
         return _fallback_roadmap(project_name, personas, analysis_report)
 
     compact_analysis = _compact_analysis(analysis_report) if analysis_report else {}
+    compact_positioning = _compact_positioning(positioning) if positioning else {}
+    compact_research = _compact_research(research_report) if research_report else {}
+
+    positioning_block = (
+        f"\nBrand positioning:\n{json.dumps(compact_positioning, ensure_ascii=True)}\n"
+        if compact_positioning else ""
+    )
+    research_block = (
+        f"\nMarket research (per-persona buying journeys, quick wins, customer language):\n"
+        f"{json.dumps(compact_research, ensure_ascii=True)}\n"
+        if compact_research else ""
+    )
 
     prompt = (
         "You are RoadmapPlannerAgent.\n"
         "Generate a practical 90-day marketing implementation roadmap tailored to this specific business.\n"
-        "Every item must be concrete and directly actionable — no generic advice.\n\n"
+        "Every item must be concrete and directly actionable — no generic advice.\n"
+        "Use the positioning statement for messaging tone and differentiation angle.\n"
+        "Use the per-persona buying journeys and quick wins from research to shape channel priorities and weekly tasks.\n"
+        "Use the customer language patterns in example messages and content themes.\n\n"
         "Return strict JSON with these exact top-level keys:\n"
         "project_name, duration_days, target_personas, priority_channels,\n"
         "weekly_plan, milestones, success_metrics,\n"
@@ -181,8 +228,9 @@ def generate_roadmap_plan(
         "     phase_1_theme (weeks 1-4, 1 sentence),\n"
         "     phase_2_theme (weeks 5-9, 1 sentence),\n"
         "     phase_3_theme (weeks 10-12, 1 sentence),\n"
-        "     example_message (one concrete subject line or opening line specific to this business)}\n"
-        "  Rules: channels must match the priority_channels list. Messages must use the business name or type.\n\n"
+        "     example_message (one concrete subject line or opening line — use the business name, "
+        "positioning tagline, or customer language patterns provided)}\n"
+        "  Rules: channels must match priority_channels. Themes must reflect the positioning differentiators.\n\n"
         "- product_checklist: 8-12 items — operational prerequisites before marketing can work:\n"
         "    {item (specific action), category (Online Presence|Operations|Content|Tools),\n"
         "     priority (must-have|nice-to-have), why_it_matters (1 sentence — cite specific impact)}\n"
@@ -192,10 +240,13 @@ def generate_roadmap_plan(
         "     revenue_impact (specific % or $ estimate with reasoning),\n"
         "     effort (low|medium|high), competitors_offering (true|false)}\n"
         "  Rules: base on competitor_services and swot_opportunities from analysis. Be specific.\n\n"
-        "- reasoning: 2-3 sentences citing which persona/channel/competitor inputs shaped priorities\n\n"
+        "- reasoning: 2-3 sentences citing which persona buying journeys, positioning differentiators, "
+        "quick wins, and competitor gaps shaped the priorities\n\n"
         f"Project: {project_name}\n"
-        f"Personas:\n{json.dumps(personas, ensure_ascii=True)}\n\n"
+        f"Personas:\n{json.dumps(personas, ensure_ascii=True)}\n"
         f"Competitor analysis summary:\n{json.dumps(compact_analysis, ensure_ascii=True)}"
+        f"{positioning_block}"
+        f"{research_block}"
     )
 
     try:

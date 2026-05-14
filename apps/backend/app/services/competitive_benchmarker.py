@@ -503,6 +503,7 @@ def run_competitive_benchmarking(
     business_address: str | None = None,
     geographical_range: str | None = None,
     conversation_analysis: dict | None = None,
+    on_step=None,
 ) -> dict:
     """
     Full pipeline:
@@ -512,14 +513,28 @@ def run_competitive_benchmarking(
       4. Place Details → enrich each competitor
       5. OpenAI enrichment → business model, services, threat level, gaps, strategies
       6. Return structured benchmarking report
+
+    on_step: optional callable(message: str, step: int, total: int) called before each step.
     """
+    _TOTAL = 5
+
+    def _emit(message: str, step: int) -> None:
+        if on_step:
+            try:
+                on_step(message, step, _TOTAL)
+            except Exception:
+                pass  # never let the callback break the pipeline
+
     if not settings.google_places_api_key:
         return _fallback_benchmarking(business_address or "", "google_places_api_key_not_configured")
 
     diagnostics: dict = {}
+
+    _emit("Identifying your business type...", 1)
     business_keyword = _infer_business_keyword(responses, conversation_analysis=conversation_analysis)
     diagnostics["keyword"] = business_keyword
 
+    _emit("Locating your business on the map...", 2)
     raw_places: list[dict] = []
 
     # --- Strategy 1: Geocode → Nearby Search (most accurate, radius-controlled) ---
@@ -529,6 +544,7 @@ def run_competitive_benchmarking(
     search_radius = _parse_range_to_meters(geographical_range, settings.benchmarking_radius_meters)
     diagnostics["search_radius_meters"] = search_radius
 
+    _emit("Scanning local competitors nearby...", 3)
     if coords:
         lat, lng = coords
         raw_places, nearby_status = _fetch_nearby_competitors(
@@ -553,10 +569,7 @@ def run_competitive_benchmarking(
     raw_places.sort(key=lambda x: float(x.get("rating") or 0), reverse=True)
     raw_places = raw_places[:30]  # keep up to 30 candidates for embedding to rank
 
-    # --- Embedding-based ranking: pick the 10 most relevant competitors cheaply ---
-    # We embed basic place data (name + types + vicinity) vs the business context.
-    # This costs ~$0.0001 and avoids fetching Place Details for irrelevant places,
-    # which in turn keeps the final LLM prompt small and fast.
+    _emit(f"Ranking {len(raw_places)} competitors by relevance to your business...", 4)
     interview_context = _build_interview_context(responses)
     business_context = f"{business_keyword} in {business_address or 'local area'}. {interview_context[:400]}"
     top_places = _rank_by_relevance(raw_places, business_context, top_n=10)
@@ -579,7 +592,7 @@ def run_competitive_benchmarking(
     avg_rating = round(sum(ratings) / len(ratings), 1) if ratings else None
     avg_price_level = round(sum(prices) / len(prices), 1) if prices else None
 
-    # AI enrichment — now only 5 competitors with full details
+    _emit("Running AI analysis — SWOT, pricing, and competitive threats...", 5)
     enrichment = _enrich_with_ai(detailed, interview_context, business_address or "", business_keyword)
 
     ai_by_name = {c["name"]: c for c in (enrichment.get("competitors") or [])}

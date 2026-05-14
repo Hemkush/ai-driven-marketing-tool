@@ -159,6 +159,7 @@ def _generate_text_assets(
     prompt_text: str,
     tone: str,
     num_variants: int,
+    on_step=None,
 ) -> list[dict]:
     type_instruction = TYPE_PROMPTS.get(normalized, (
         f'Generate a {normalized.replace("_", " ")} asset. Return JSON with relevant fields '
@@ -177,8 +178,16 @@ def _generate_text_assets(
     )
     user = f"{type_instruction}\n\nAdditional context: {prompt_text}"
 
+    def _emit(message: str, step: int) -> None:
+        if on_step:
+            try:
+                on_step(message, step, num_variants)
+            except Exception:
+                pass
+
     results = []
-    for _ in range(num_variants):
+    for i in range(num_variants):
+        _emit(f"Writing variant {i + 1} of {num_variants}…", i + 1)
         try:
             resp = tracked_chat(client, agent="content_studio",
                 model=settings.openai_model,
@@ -213,10 +222,18 @@ def _generate_visual_assets(
     prompt_text: str,
     tone: str,
     num_variants: int,
+    on_step=None,
 ) -> list[dict]:
     tone_desc = _get_tone_desc(tone)
+    _total = num_variants * 2  # brief + image per variant
 
-    # Step 1: Generate design brief + DALL-E prompt via chat
+    def _emit(message: str, step: int) -> None:
+        if on_step:
+            try:
+                on_step(message, step, _total)
+            except Exception:
+                pass
+
     brief_system = (
         f"You are a senior brand designer creating a {normalized.replace('_', ' ')} for {project_name}.\n"
         f"Tone/style: {tone_desc}\n"
@@ -226,11 +243,12 @@ def _generate_visual_assets(
     brief_user = f"{VISUAL_BRIEF_PROMPT}\n\nAdditional direction: {prompt_text}"
 
     results = []
-    for _ in range(num_variants):
+    for i in range(num_variants):
         image_url = None
         dalle_prompt = None
         design_brief = {}
 
+        _emit(f"Crafting design brief for variant {i + 1} of {num_variants}…", i * 2 + 1)
         try:
             brief_resp = tracked_chat(client, agent="content_studio_brief",
                 model=settings.openai_model,
@@ -248,19 +266,16 @@ def _generate_visual_assets(
                 f"{tone_desc}, clean and modern"
             )
 
-        # Step 2: Generate image with DALL-E 3
-        # Use response_format="b64_json" so the image is returned as base64 — it is
-        # stored directly in the DB and never expires (unlike temporary DALL-E URLs).
-        image_data = None  # base64 data URL — permanent, works after reload
+        _emit(f"Generating image for variant {i + 1} of {num_variants}…", i * 2 + 2)
+        image_data = None
         dalle_error = None
         if dalle_prompt:
             try:
                 img_resp = tracked_image(client, agent="content_studio",
-                    model="dall-e-3",
+                    model="gpt-image-1",
                     prompt=dalle_prompt[:4000],
                     size="1024x1024",
-                    quality="standard",
-                    response_format="b64_json",
+                    quality="medium",
                     n=1,
                 )
                 b64 = img_resp.data[0].b64_json
@@ -293,6 +308,7 @@ def generate_content_assets(
     prompt_text: str,
     num_variants: int = 3,
     tone: str = "professional",
+    on_step=None,
 ) -> list[dict]:
     num_variants = max(1, min(5, num_variants))
     normalized = _normalize(asset_type)
@@ -309,9 +325,9 @@ def generate_content_assets(
 
     try:
         if _is_visual(normalized):
-            assets = _generate_visual_assets(client, project_name, strategy, normalized, prompt_text, tone, num_variants)
+            assets = _generate_visual_assets(client, project_name, strategy, normalized, prompt_text, tone, num_variants, on_step=on_step)
         else:
-            assets = _generate_text_assets(client, project_name, strategy, roadmap, normalized, prompt_text, tone, num_variants)
+            assets = _generate_text_assets(client, project_name, strategy, roadmap, normalized, prompt_text, tone, num_variants, on_step=on_step)
         score_content(assets)
         return assets
     except Exception:

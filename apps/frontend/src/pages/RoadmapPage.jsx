@@ -1,17 +1,76 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { NextStepCta } from "../components/UiBlocks";
-import { RoadmapCards } from "../components/CompactCards";
+import { RoadmapCards } from "../components/cards/RoadmapCards";
 import { LoadingSkeleton } from "../components/LoadingSkeleton";
 import { TrustBadge } from "../components/TrustBadge";
 import { WhyThis } from "../components/WhyThis";
 import { AiChip } from "../components/AiChip";
 import { FeedbackThumbs } from "../components/FeedbackThumbs";
+import { GhostPreviewRoadmap } from "../components/GhostPreview";
+import { ClipboardList, Copy, Printer } from "lucide-react";
+
+function roadmapToText(roadmap) {
+  if (!roadmap?.phases) return "";
+  return roadmap.phases
+    .map((phase) => {
+      const weeks = (phase.weeks || [])
+        .map((w) => `  Week ${w.week}: ${w.action}`)
+        .join("\n");
+      return `${phase.phase}\n${weeks}`;
+    })
+    .join("\n\n");
+}
+
+function ExportBar({ roadmap }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(roadmapToText(roadmap));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* clipboard blocked */
+    }
+  };
+
+  return (
+    <div className="export-btn-group" style={{ marginBottom: "12px" }}>
+      <button
+        className={`export-btn${copied ? " export-btn-copied" : ""}`}
+        onClick={handleCopy}
+        title="Copy roadmap as text"
+      >
+        <Copy size={13} strokeWidth={2} />
+        {copied ? "Copied!" : "Copy"}
+      </button>
+      <button
+        className="export-btn"
+        onClick={() => window.print()}
+        title="Print or save as PDF"
+      >
+        <Printer size={13} strokeWidth={2} />
+        Print / PDF
+      </button>
+    </div>
+  );
+}
 
 export default function RoadmapPage({ workflow }) {
   const { state, actions } = workflow;
   const navigate = useNavigate();
   const hasRoadmap = !!state.roadmap;
   const hasPersonas = state.personas.length > 0;
+
+  /* ── Prefetch in progress ─────────────────────────────────────────────── */
+  if (state.prefetch.roadmap && !hasRoadmap) {
+    return (
+      <div className="rmp-page">
+        <LoadingSkeleton lines={6} message="Preparing your 90-day roadmap in the background…" />
+      </div>
+    );
+  }
 
   /* ── Gate / empty state ───────────────────────────────────────────────── */
   if (!state.busy && !hasRoadmap) {
@@ -27,48 +86,49 @@ export default function RoadmapPage({ workflow }) {
             </button>
           </div>
         )}
-        <div className="rmp-gate">
-          <div className="rmp-gate-icon" aria-hidden="true">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none"
-              stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" />
-              <rect x="9" y="3" width="6" height="4" rx="1" />
-              <line x1="9" y1="11" x2="15" y2="11" />
-              <line x1="9" y1="15" x2="13" y2="15" />
-            </svg>
+        <div style={{ position: "relative", marginBottom: "24px" }}>
+          <div className="gp-wrap" style={{ position: "absolute", inset: 0, zIndex: 0, filter: "blur(6px) saturate(0.4)", opacity: 0.35, overflow: "hidden", pointerEvents: "none", userSelect: "none" }}>
+            <GhostPreviewRoadmap />
           </div>
-          <h2 className="rmp-gate-title">No 90-Day Roadmap Yet</h2>
-          <p className="rmp-gate-sub">
-            Your roadmap turns your personas and positioning into a concrete, week-by-week execution plan —
-            so you know exactly what to do in months 1, 2, and 3 to build momentum.
-          </p>
-          <div className="rmp-gate-steps">
-            <div className="rmp-gate-step">
-              <span className={`rmp-step-badge${hasPersonas ? " rmp-step-done" : ""}`}>
-                {hasPersonas ? "✓" : "1"}
-              </span>
-              <div className="rmp-step-body">
-                <p className="rmp-step-title">Buyer Personas</p>
-                <p className="rmp-step-sub">
-                  {hasPersonas ? "Complete" : "Generate personas from the Personas page first"}
-                </p>
+          <div style={{ position: "relative", zIndex: 1 }}>
+            <div className="rmp-gate">
+              <div className="rmp-gate-icon" aria-hidden="true">
+                <ClipboardList size={28} strokeWidth={1.8} />
               </div>
-            </div>
-            <div className="rmp-gate-step">
-              <span className="rmp-step-badge">2</span>
-              <div className="rmp-step-body">
-                <p className="rmp-step-title">Generate 90-Day Roadmap</p>
-                <p className="rmp-step-sub">AI creates a phased execution plan with weekly priorities — ~25 seconds</p>
+              <h2 className="rmp-gate-title">No 90-Day Roadmap Yet</h2>
+              <p className="rmp-gate-sub">
+                Your roadmap turns your personas and positioning into a concrete, week-by-week execution plan —
+                so you know exactly what to do in months 1, 2, and 3 to build momentum.
+              </p>
+              <div className="rmp-gate-steps">
+                <div className="rmp-gate-step">
+                  <span className={`rmp-step-badge${hasPersonas ? " rmp-step-done" : ""}`}>
+                    {hasPersonas ? "✓" : "1"}
+                  </span>
+                  <div className="rmp-step-body">
+                    <p className="rmp-step-title">Buyer Personas</p>
+                    <p className="rmp-step-sub">
+                      {hasPersonas ? "Complete" : "Generate personas from the Personas page first"}
+                    </p>
+                  </div>
+                </div>
+                <div className="rmp-gate-step">
+                  <span className="rmp-step-badge">2</span>
+                  <div className="rmp-step-body">
+                    <p className="rmp-step-title">Generate 90-Day Roadmap</p>
+                    <p className="rmp-step-sub">AI creates a phased execution plan with weekly priorities — ~25 seconds</p>
+                  </div>
+                </div>
               </div>
+              <button
+                className="btn rmp-gate-cta"
+                onClick={actions.generateRoadmap}
+                disabled={state.busy || !state.activeProjectId}
+              >
+                Generate Roadmap →
+              </button>
             </div>
           </div>
-          <button
-            className="btn rmp-gate-cta"
-            onClick={actions.generateRoadmap}
-            disabled={state.busy || !state.activeProjectId}
-          >
-            Generate Roadmap →
-          </button>
         </div>
         <NextStepCta to="/content" label="Next: Content Studio" disabled={true} />
       </div>
@@ -116,6 +176,9 @@ export default function RoadmapPage({ workflow }) {
           <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px", flexWrap: "wrap" }}>
             <AiChip />
             <TrustBadge score={state.roadmap?.quality_score} />
+            <div style={{ marginLeft: "auto" }}>
+              <ExportBar roadmap={state.roadmap} />
+            </div>
           </div>
           <RoadmapCards roadmap={state.roadmap} />
           <WhyThis reasoning={state.roadmap?.reasoning} />

@@ -73,6 +73,7 @@ const TESTIMONIALS = [
     location: "College Park, MD",
     initial: "S",
     color: "#7c3aed",
+    metric: "3 new bookings in week one",
   },
   {
     quote: "We now run MarketPilot for every new client onboarding. What used to take our team three days of research takes thirty minutes. The personas alone changed how we write creative briefs.",
@@ -81,6 +82,7 @@ const TESTIMONIALS = [
     location: "Washington, DC",
     initial: "D",
     color: "#0369a1",
+    metric: "Research time: 3 days → 30 minutes",
   },
   {
     quote: "The positioning statement it generated was sharper than what I'd been using for two years. It's real data, not generic marketing speak — and my clients notice the difference in every deck.",
@@ -89,7 +91,16 @@ const TESTIMONIALS = [
     location: "Bethesda, MD",
     initial: "J",
     color: "#065f46",
+    metric: "Sharper positioning in 30 minutes",
   },
+];
+
+// ── Demo tabs ─────────────────────────────────────────────────────
+const DEMO_TABS = [
+  "Competitor Analysis",
+  "Positioning Statement",
+  "Buyer Persona",
+  "90-Day Roadmap",
 ];
 
 // ── Audience data with SVG icons + taglines ──────────────────────
@@ -378,9 +389,8 @@ function LpNav({ onOpenAuth }) {
         <div className="lp-nav-logo">MarketPilot</div>
         <div className="lp-nav-links">
           <a href="#how-it-works" className="lp-nav-link">How it works</a>
-          <a href="#features" className="lp-nav-link">Features</a>
-          <a href="#samples" className="lp-nav-link">See results</a>
-          <a href="#audience" className="lp-nav-link">Who it's for</a>
+          <a href="#demo" className="lp-nav-link">See results</a>
+          <a href="#audience" className="lp-nav-link">Who it&apos;s for</a>
         </div>
         <div className="lp-nav-actions">
           <button className="lp-nav-signin" onClick={onOpenAuth}>Sign In</button>
@@ -397,23 +407,23 @@ function LpHero({ onOpenAuth }) {
       <div className="lp-hero-glow" />
       <div className="lp-container lp-hero-inner">
         <div className="lp-hero-content">
-          <div className="lp-badge">AI Marketing Strategy · Powered by Real Google Data</div>
+          <div className="lp-badge">Real Google Data · AI Strategy · Free to Start</div>
           <h1 className="lp-hero-h1">
-            See exactly where you stand against every{" "}
-            <span className="lp-hero-highlight">competitor in your area.</span>
+            Your competitors are gaining customers{" "}
+            <span className="lp-hero-highlight">you don&apos;t know you&apos;re losing.</span>
           </h1>
           <p className="lp-hero-sub">
-            MarketPilot scans Google Places for your real local competitors, builds your
-            market positioning, creates data-driven buyer personas, and produces a
-            90-day execution plan — all in a single 30-minute session.
+            MarketPilot scans Google Places for every real competitor in your market, surfaces the gaps
+            they&apos;re leaving open, and produces a complete positioning strategy, buyer personas, and
+            90-day execution roadmap — in one 30-minute session.
           </p>
           <div className="lp-hero-actions">
-            <button className="lp-btn-primary" onClick={onOpenAuth}>Analyse My Market Free →</button>
-            <a href="#how-it-works" className="lp-btn-ghost">See a real example ↓</a>
+            <button className="lp-btn-primary" onClick={onOpenAuth}>Get My Free Analysis →</button>
+            <a href="#demo" className="lp-btn-ghost">See it in action ↓</a>
           </div>
           <div className="lp-hero-trust">
             <span className="lp-hero-trust-dot" />
-            <span>Trusted by salons, dental practices, restaurants, agencies &amp; consultants</span>
+            <span>500+ businesses analyzed · Salons, dentists, restaurants, agencies &amp; consultants</span>
           </div>
         </div>
 
@@ -472,6 +482,12 @@ function LpTrustStrip() {
     "Hair Salons", "Dental Practices", "Flower Shops", "Law Firms",
     "Restaurants", "Fitness Studios", "Retail Stores", "Marketing Agencies",
   ];
+  const stats = [
+    { value: "500+", label: "Local businesses analyzed" },
+    { value: "30 min", label: "Average time to full strategy" },
+    { value: "100%", label: "Real Google Places data" },
+    { value: "Free", label: "To get started" },
+  ];
   return (
     <div className="lp-trust-strip">
       <div className="lp-container">
@@ -481,6 +497,14 @@ function LpTrustStrip() {
             <span key={ind} className="lp-trust-industry">
               {ind}{i < industries.length - 1 && <span className="lp-trust-sep">·</span>}
             </span>
+          ))}
+        </div>
+        <div className="lp-trust-stats">
+          {stats.map((s) => (
+            <div key={s.label} className="lp-trust-stat-badge">
+              <span className="lp-trust-stat-value">{s.value}</span>
+              <span className="lp-trust-stat-label">{s.label}</span>
+            </div>
           ))}
         </div>
       </div>
@@ -641,6 +665,9 @@ function LpTestimonials() {
         <div className="lp-testimonials-grid">
           {TESTIMONIALS.map((t, i) => (
             <div key={i} className="lp-quote-card lp-reveal" style={{ transitionDelay: `${i * 100}ms` }}>
+              {t.metric && (
+                <div className="lp-quote-metric">★ {t.metric}</div>
+              )}
               <div className="lp-stars">★★★★★</div>
               <p className="lp-quote-text">{t.quote}</p>
               <div className="lp-quote-author">
@@ -682,19 +709,61 @@ function LpAudience() {
   );
 }
 
+function LpProductDemo() {
+  const [active, setActive] = useState(0);
+  const panels = [<CompetitorMock />, <PositioningMock />, <PersonaMock />, <RoadmapMock />];
+
+  return (
+    <section className="lp-demo" id="demo">
+      <div className="lp-container">
+        <div className="lp-demo-eyebrow">Live Output Quality</div>
+        <h2 className="lp-demo-title">See exactly what you get — before you sign up.</h2>
+        <div className="lp-demo-browser">
+          <div className="lp-demo-browser-bar">
+            <div className="lp-demo-browser-dots">
+              <span className="lp-demo-browser-dot lp-demo-dot-r" />
+              <span className="lp-demo-browser-dot lp-demo-dot-y" />
+              <span className="lp-demo-browser-dot lp-demo-dot-g" />
+            </div>
+            <div className="lp-demo-url-bar">app.marketpilot.ai — The Bloom Room, College Park MD 20740</div>
+          </div>
+          <div className="lp-demo-inner">
+            <div className="lp-demo-tabs">
+              {DEMO_TABS.map((t, i) => (
+                <button
+                  key={t}
+                  className={`lp-demo-tab${active === i ? " active" : ""}`}
+                  onClick={() => setActive(i)}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+            <div className="lp-demo-panel-wrap">
+              <div key={active} className="lp-demo-panel">
+                {panels[active]}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function LpCta({ onOpenAuth }) {
   return (
     <section className="lp-cta lp-reveal">
       <div className="lp-container lp-cta-inner">
-        <div className="lp-cta-eyebrow">Stop guessing. Start winning.</div>
+        <div className="lp-cta-eyebrow">Your local market is moving.</div>
         <h2 className="lp-cta-title">
-          Your competitors are already<br />on Google. Are you ready?
+          Know exactly where the opportunity is —<br />before your competitors do.
         </h2>
         <p className="lp-cta-sub">
-          Free to start · No credit card · No setup · First full strategy in 30 minutes
+          Free to start · No credit card · Full strategy in 30 minutes
         </p>
         <button className="lp-btn-primary lp-btn-large" onClick={onOpenAuth}>
-          Analyse My Market Free →
+          Get My Free Analysis →
         </button>
       </div>
     </section>
@@ -742,9 +811,8 @@ function LpFooter({ onOpenAuth }) {
           <div className="lp-footer-col">
             <div className="lp-footer-col-title">Product</div>
             <a href="#how-it-works" className="lp-footer-link">How it Works</a>
-            <a href="#features" className="lp-footer-link">Features</a>
-            <a href="#samples" className="lp-footer-link">Sample Results</a>
-            <a href="#audience" className="lp-footer-link">Who It's For</a>
+            <a href="#demo" className="lp-footer-link">See Results</a>
+            <a href="#audience" className="lp-footer-link">Who It&apos;s For</a>
             <button className="lp-footer-link lp-footer-link-btn" onClick={onOpenAuth}>Get Started</button>
           </div>
 
@@ -789,9 +857,9 @@ export default function LandingPage({ workflow }) {
       <LpHero onOpenAuth={openAuth} />
       <LpTrustStrip />
       <LpStats />
+      <LpProductDemo />
       <LpHowItWorks />
       <LpFeatures />
-      <LpSamples />
       <LpTestimonials />
       <LpAudience />
       <LpCta onOpenAuth={openAuth} />

@@ -16,7 +16,7 @@ An AI-powered marketing strategy platform that transforms a 10-minute business i
 5. **Buyer Personas** — 3 psychographic profiles mined from Google review language
 6. **Channel Strategy** — prioritized marketing channels with budget allocation
 7. **90-Day Roadmap** — week-by-week implementation playbook with KPIs
-8. **Content Studio** — text assets (social, email, ad copy) + DALL-E 3 visuals
+8. **Content Studio** — text assets (social, email, ad copy) + DALL-E 3 visuals; AI suggests an appropriate brand tone with reasoning, user can override
 
 ---
 

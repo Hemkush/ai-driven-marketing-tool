@@ -1,25 +1,34 @@
 import { useNavigate } from "react-router-dom";
 import { NextStepCta } from "../components/UiBlocks";
-import { ResearchCards } from "../components/CompactCards";
+import { ResearchCards } from "../components/cards/ResearchCards";
 import { LoadingSkeleton } from "../components/LoadingSkeleton";
 import { TrustBadge } from "../components/TrustBadge";
 import { WhyThis } from "../components/WhyThis";
 import { AiChip } from "../components/AiChip";
 import { FeedbackThumbs } from "../components/FeedbackThumbs";
+import { GhostPreviewResearch } from "../components/GhostPreview";
+import { ScanSearch } from "lucide-react";
 
 function FocusInput({ value, onChange, onRun, busy, hasResearch }) {
   return (
     <div className="rsp-focus-card">
-      <p className="rsp-focus-label">
-        {hasResearch ? "Refocus the research" : "Optional: focus this research"}
+      <div className="rsp-focus-header">
+        <span className="rsp-focus-badge">Optional</span>
+        <p className="rsp-focus-label">
+          {hasResearch ? "Refocus the research" : "Focus this research"}
+        </p>
+      </div>
+      <p className="rsp-focus-hint">
+        Direct the AI toward a specific angle — e.g. Instagram marketing, the premium segment, or a particular competitor. Leave blank for a broad overview.
       </p>
       <div className="rsp-focus-row">
-        <textarea
-          className="rsp-focus-textarea"
-          placeholder="e.g. Focus on Instagram marketing, or dig into the premium customer segment…"
+        <input
+          className="rsp-focus-input"
+          type="text"
+          placeholder="e.g. Instagram marketing, weekend customers…"
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          rows={2}
+          onKeyDown={(e) => e.key === "Enter" && !busy && onRun()}
         />
         <button
           className="btn rsp-focus-btn"
@@ -43,6 +52,15 @@ export default function ResearchPage({ workflow }) {
   const hasResearch = !!state.research;
   const hasPersonas = state.personas?.length > 0;
 
+  /* ── Prefetch in progress ─────────────────────────────────────────────── */
+  if (state.prefetch.research && !hasResearch) {
+    return (
+      <div className="rsp-page">
+        <LoadingSkeleton lines={5} message="Preparing your market research in the background…" />
+      </div>
+    );
+  }
+
   /* ── Gate / empty state ───────────────────────────────────────────────── */
   if (!state.busy && !hasResearch) {
     return (
@@ -57,52 +75,55 @@ export default function ResearchPage({ workflow }) {
             </button>
           </div>
         )}
-        <div className="rsp-gate">
-          <div className="rsp-gate-icon" aria-hidden="true">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none"
-              stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="11" cy="11" r="8" />
-              <path d="m21 21-4.35-4.35" />
-              <path d="M11 8v6M8 11h6" />
-            </svg>
+        <div style={{ position: "relative", marginBottom: "24px" }}>
+          <div className="gp-wrap" style={{ position: "absolute", inset: 0, zIndex: 0, filter: "blur(6px) saturate(0.4)", opacity: 0.35, overflow: "hidden", pointerEvents: "none", userSelect: "none" }}>
+            <GhostPreviewResearch />
           </div>
-          <h2 className="rsp-gate-title">No Market Research Yet</h2>
-          <p className="rsp-gate-sub">
-            Deep market research uncovers evidence-backed customer insights, buying journeys per
-            persona, quick wins, and untapped opportunities — giving your strategy a competitive
-            edge grounded in data.
-          </p>
-          <div className="rsp-gate-steps">
-            <div className="rsp-gate-step">
-              <span className={`rsp-step-badge${hasPersonas ? " rsp-step-done" : ""}`}>
-                {hasPersonas ? "✓" : "1"}
-              </span>
-              <div className="rsp-step-body">
-                <p className="rsp-step-title">Buyer Personas</p>
-                <p className="rsp-step-sub">
-                  {hasPersonas
-                    ? `Complete — ${state.personas.length} persona${state.personas.length !== 1 ? "s" : ""} will be used to personalise research`
-                    : "Generate personas from the Personas page first"}
-                </p>
+          <div style={{ position: "relative", zIndex: 1 }}>
+            <div className="rsp-gate">
+              <div className="rsp-gate-icon" aria-hidden="true">
+                <ScanSearch size={28} strokeWidth={1.8} />
               </div>
-            </div>
-            <div className="rsp-gate-step">
-              <span className="rsp-step-badge">2</span>
-              <div className="rsp-step-body">
-                <p className="rsp-step-title">Run Deep Research</p>
-                <p className="rsp-step-sub">
-                  AI produces buying journeys per persona, quick wins, and market insights — ~30 seconds
-                </p>
+              <h2 className="rsp-gate-title">No Market Research Yet</h2>
+              <p className="rsp-gate-sub">
+                Deep market research uncovers evidence-backed customer insights, buying journeys per
+                persona, quick wins, and untapped opportunities — giving your strategy a competitive
+                edge grounded in data.
+              </p>
+              <div className="rsp-gate-steps">
+                <div className="rsp-gate-step">
+                  <span className={`rsp-step-badge${hasPersonas ? " rsp-step-done" : ""}`}>
+                    {hasPersonas ? "✓" : "1"}
+                  </span>
+                  <div className="rsp-step-body">
+                    <p className="rsp-step-title">Buyer Personas</p>
+                    <p className="rsp-step-sub">
+                      {hasPersonas
+                        ? `Complete — ${state.personas.length} persona${state.personas.length !== 1 ? "s" : ""} will be used to personalise research`
+                        : "Generate personas from the Personas page first"}
+                    </p>
+                  </div>
+                </div>
+                <div className="rsp-gate-step">
+                  <span className="rsp-step-badge">2</span>
+                  <div className="rsp-step-body">
+                    <p className="rsp-step-title">Run Deep Research</p>
+                    <p className="rsp-step-sub">
+                      AI produces buying journeys per persona, quick wins, and market insights — ~30 seconds
+                    </p>
+                  </div>
+                </div>
               </div>
+              <button
+                className="btn"
+                onClick={actions.runResearch}
+                disabled={state.busy}
+                style={{ marginTop: "8px" }}
+              >
+                Run Research →
+              </button>
             </div>
           </div>
-          <FocusInput
-            value={state.researchFocus}
-            onChange={set.setResearchFocus}
-            onRun={actions.runResearch}
-            busy={state.busy}
-            hasResearch={false}
-          />
         </div>
         <NextStepCta to="/roadmap" label="Next: Roadmap" disabled={true} />
       </div>

@@ -1,12 +1,10 @@
 import { useState } from "react";
-import {
-  CompetitorCards,
-  ContentAssetCards,
-  PersonaCards,
-  PositioningCard,
-  ResearchCards,
-  RoadmapCards,
-} from "./CompactCards";
+import { CompetitorCards } from "./cards/CompetitorCards";
+import { ContentAssetCards } from "./cards/ContentAssetCards";
+import { PersonaCards } from "./cards/PersonaCards";
+import { PositioningCard } from "./cards/PositioningCard";
+import { ResearchCards } from "./cards/ResearchCards";
+import { RoadmapCards } from "./cards/RoadmapCards";
 
 // ── Workflow steps (matches AppShell order) ───────────────────────
 const TIMELINE_STEPS = [
@@ -228,13 +226,18 @@ export default function ProjectPanel({
                 />
               </FormField>
               <div className="pp-fields-row">
-                <FormField label="Operating Location">
+                <FormField label="Operating Location *">
                   <input
                     className="pp-input"
                     placeholder="e.g. College Park, MD 20740"
                     value={projectBusinessAddress}
                     onChange={(e) => setProjectBusinessAddress(e.target.value)}
                   />
+                  {projectBusinessAddress && !/\b\d{5}\b/.test(projectBusinessAddress) && (
+                    <p style={{ margin: "4px 0 0", fontSize: "12px", color: "var(--color-error, #b91c1c)" }}>
+                      Please include a ZIP code (e.g. 20740)
+                    </p>
+                  )}
                 </FormField>
               </div>
               <FormField label="Business Description">

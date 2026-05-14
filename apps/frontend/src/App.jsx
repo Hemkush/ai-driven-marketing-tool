@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { useEffect } from "react";
 import AppShell from "./components/AppShell";
+import ErrorBoundary from "./components/ErrorBoundary";
 import ToastStack from "./components/ToastStack";
 import LandingPage from "./pages/LandingPage";
 import LoginPage from "./pages/LoginPage";
@@ -14,6 +15,8 @@ import ResearchPage from "./pages/ResearchPage";
 import RoadmapPage from "./pages/RoadmapPage";
 import VerifyEmailPage from "./pages/VerifyEmailPage";
 import { useMvpWorkflow } from "./state/useMvpWorkflow";
+import MilestoneModal from "./components/MilestoneModal";
+import CommandPalette from "./components/CommandPalette";
 
 export default function App() {
   const workflow = useMvpWorkflow();
@@ -47,19 +50,55 @@ export default function App() {
   }
 
   return (
-    <AppShell me={state.me} onLogout={actions.logout} progress={progress} busy={state.busy}>
+    <AppShell me={state.me} onLogout={actions.logout} progress={progress} busy={state.busy} projectName={state.activeProject?.name || ""}>
       <ToastStack toasts={state.toasts} onDismiss={actions.dismissToast} />
+      {state.milestone && (
+        <MilestoneModal milestone={state.milestone} onDismiss={actions.dismissMilestone} />
+      )}
+      <CommandPalette />
       <Routes>
         <Route path="/" element={<Navigate to="/projects" replace />} />
         <Route path="/login" element={<Navigate to="/projects" replace />} />
-        <Route path="/projects" element={<ProjectsPage workflow={workflow} />} />
-        <Route path="/questionnaire" element={<QuestionnairePage workflow={workflow} />} />
-        <Route path="/analysis" element={<AnalysisPage workflow={workflow} />} />
-        <Route path="/positioning" element={<PositioningPage workflow={workflow} />} />
-        <Route path="/research" element={<ResearchPage workflow={workflow} />} />
-        <Route path="/personas" element={<PersonasPage workflow={workflow} />} />
-        <Route path="/roadmap" element={<RoadmapPage workflow={workflow} />} />
-        <Route path="/content" element={<ContentPage workflow={workflow} />} />
+        <Route path="/projects" element={
+          <ErrorBoundary pageName="Business Profile">
+            <ProjectsPage workflow={workflow} />
+          </ErrorBoundary>
+        } />
+        <Route path="/questionnaire" element={
+          <ErrorBoundary pageName="Marketing Discovery">
+            <QuestionnairePage workflow={workflow} />
+          </ErrorBoundary>
+        } />
+        <Route path="/analysis" element={
+          <ErrorBoundary pageName="Competitive Benchmarking">
+            <AnalysisPage workflow={workflow} />
+          </ErrorBoundary>
+        } />
+        <Route path="/positioning" element={
+          <ErrorBoundary pageName="Positioning">
+            <PositioningPage workflow={workflow} />
+          </ErrorBoundary>
+        } />
+        <Route path="/research" element={
+          <ErrorBoundary pageName="Research">
+            <ResearchPage workflow={workflow} />
+          </ErrorBoundary>
+        } />
+        <Route path="/personas" element={
+          <ErrorBoundary pageName="Personas">
+            <PersonasPage workflow={workflow} />
+          </ErrorBoundary>
+        } />
+        <Route path="/roadmap" element={
+          <ErrorBoundary pageName="Roadmap">
+            <RoadmapPage workflow={workflow} />
+          </ErrorBoundary>
+        } />
+        <Route path="/content" element={
+          <ErrorBoundary pageName="Content Studio">
+            <ContentPage workflow={workflow} />
+          </ErrorBoundary>
+        } />
         <Route path="*" element={<Navigate to="/projects" replace />} />
       </Routes>
 

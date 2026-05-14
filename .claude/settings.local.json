@@ -19,7 +19,9 @@
       "Bash(gcloud auth *)",
       "Bash(gcloud builds *)",
       "Bash(gcloud run *)",
-      "Bash(firebase deploy *)"
+      "Bash(firebase deploy *)",
+      "Bash(gcloud --version)",
+      "Bash(firebase --version)"
     ]
   }
 }

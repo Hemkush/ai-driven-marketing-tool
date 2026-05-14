@@ -1,12 +1,66 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { NextStepCta } from "../components/UiBlocks";
-import { PersonaCards } from "../components/CompactCards";
+import { PersonaCards } from "../components/cards/PersonaCards";
 import { LoadingSkeleton } from "../components/LoadingSkeleton";
 import { TrustBadge } from "../components/TrustBadge";
 import { WhyThis } from "../components/WhyThis";
 import { AiChip } from "../components/AiChip";
 import { FeedbackThumbs } from "../components/FeedbackThumbs";
+import { GhostPreviewPersonas } from "../components/GhostPreview";
+import { Copy, Printer } from "lucide-react";
+
+function personasToText(personas) {
+  return personas
+    .map((p) =>
+      [
+        `== ${p.name || "Persona"} ==`,
+        p.age ? `Age: ${p.age}` : "",
+        p.occupation ? `Occupation: ${p.occupation}` : "",
+        p.goal ? `Goal: ${p.goal}` : "",
+        p.pain_point ? `Pain point: ${p.pain_point}` : "",
+        p.channels?.length ? `Channels: ${p.channels.join(", ")}` : "",
+      ]
+        .filter(Boolean)
+        .join("\n")
+    )
+    .join("\n\n");
+}
+
+function PersonaExportBar({ personas }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(personasToText(personas));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* clipboard blocked */
+    }
+  };
+
+  return (
+    <div className="export-btn-group">
+      <button
+        className={`export-btn${copied ? " export-btn-copied" : ""}`}
+        onClick={handleCopy}
+        title="Copy personas as text"
+      >
+        <Copy size={13} strokeWidth={2} />
+        {copied ? "Copied!" : "Copy"}
+      </button>
+      <button
+        className="export-btn"
+        onClick={() => window.print()}
+        title="Print or save as PDF"
+      >
+        <Printer size={13} strokeWidth={2} />
+        Print / PDF
+      </button>
+    </div>
+  );
+}
 
 export default function PersonasPage({ workflow }) {
   const { state, set, actions } = workflow;
@@ -60,6 +114,16 @@ export default function PersonasPage({ workflow }) {
         <LoadingSkeleton lines={6} message="Building your buyer personas…" />
       )}
 
+      {/* Ghost preview — visible when no personas yet */}
+      {!state.busy && !isPrefetching && !hasPersonas && (
+        <div className="gp-page-wrap" style={{ margin: "0 0 8px" }}>
+          <div className="gp-wrap"><GhostPreviewPersonas /></div>
+          <div style={{ textAlign: "center", padding: "80px 32px 24px", color: "var(--text-secondary)", fontSize: "13px" }}>
+            <p style={{ margin: 0, fontWeight: 500 }}>Generate personas to see detailed profiles of your most valuable customer segments.</p>
+          </div>
+        </div>
+      )}
+
       {/* Persona cards */}
       {!state.busy && !isPrefetching && hasPersonas && (
         <div className="pp-personas">
@@ -72,6 +136,7 @@ export default function PersonasPage({ workflow }) {
             <span className="pp-personas-hint">
               Each persona is synthesised from your specific business data, location, and market context.
             </span>
+            <PersonaExportBar personas={state.personas} />
           </div>
           <PersonaCards personas={state.personas} />
           <WhyThis reasoning={firstPersona?.reasoning} />

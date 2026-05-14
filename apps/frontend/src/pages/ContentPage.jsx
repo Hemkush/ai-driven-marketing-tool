@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { NextStepCta } from "../components/UiBlocks";
-import { ContentAssetCards } from "../components/CompactCards";
+import { ContentAssetCards } from "../components/cards/ContentAssetCards";
 import { LoadingSkeleton } from "../components/LoadingSkeleton";
 import { TrustBadge } from "../components/TrustBadge";
 import { AiChip } from "../components/AiChip";
@@ -231,8 +231,8 @@ export default function ContentPage({ workflow }) {
               <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" />
               <line x1="12" y1="16" x2="12.01" y2="16" />
             </svg>
-            DALL-E 3 generates the image; a detailed design brief is always included as a reference.
-            Image URLs expire after 1 hour — save them promptly.
+            AI generates the image; a detailed design brief is always included as a reference.
+            Images are stored permanently — download anytime.
           </div>
         )}
 
@@ -259,11 +259,33 @@ export default function ContentPage({ workflow }) {
         )}
       </div>
 
-      {/* Loading */}
-      {state.busy && (
+      {/* Loading — streaming progress */}
+      {state.busy && state.contentStreamProgress.length > 0 && (
+        <div className="sp-wrap">
+          {state.contentStreamProgress.map((s, i) => (
+            <div key={i} className={`sp-step ${s.done ? "sp-done" : "sp-active"}`}>
+              <div className="sp-icon" aria-hidden="true">
+                {s.done ? (
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                ) : (
+                  <div className="sp-spinner" />
+                )}
+              </div>
+              <div className="sp-text">
+                <span className="sp-label">{s.message}</span>
+                {!s.done && <span className="sp-sub">Step {s.step} of {s.total}</span>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {state.busy && state.contentStreamProgress.length === 0 && (
         <LoadingSkeleton lines={4} message={
           isVisual
-            ? "Generating image and design brief — this takes ~20 seconds…"
+            ? "Generating image and design brief…"
             : "Generating your content assets…"
         } />
       )}

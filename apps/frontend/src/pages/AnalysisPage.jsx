@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { NextStepCta } from "../components/UiBlocks";
-import { CompetitorCards } from "../components/CompactCards";
+import { CompetitorCards } from "../components/cards/CompetitorCards";
 import { LoadingSkeleton } from "../components/LoadingSkeleton";
 import { TrustBadge } from "../components/TrustBadge";
 import { WhyThis } from "../components/WhyThis";
@@ -233,8 +233,34 @@ export default function AnalysisPage({ workflow }) {
         </button>
       </div>
 
-      {/* Loading */}
-      {state.busy && (
+      {/* Streaming progress — real-time pipeline steps */}
+      {state.busy && state.streamProgress.length > 0 && (
+        <div className="sp-wrap">
+          {state.streamProgress.map((s, i) => (
+            <div key={i} className={`sp-step ${s.done ? "sp-done" : "sp-active"}`}>
+              <div className="sp-icon" aria-hidden="true">
+                {s.done ? (
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                ) : (
+                  <div className="sp-spinner" />
+                )}
+              </div>
+              <div className="sp-text">
+                <span className="sp-label">{s.message}</span>
+                {!s.done && (
+                  <span className="sp-sub">Step {s.step} of {s.total}</span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Fallback skeleton before first step arrives */}
+      {state.busy && state.streamProgress.length === 0 && (
         <LoadingSkeleton lines={4} message="Scanning your local market and benchmarking competitors…" />
       )}
 

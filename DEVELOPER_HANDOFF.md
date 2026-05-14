@@ -274,6 +274,7 @@ All application state lives in a single custom React hook. Key state:
 | `positioningHistory` | Array of positioning statement versions (latest first) |
 | `positioningFeedback` | User's feedback text for refinement |
 | `prefetch` | `{ positioning: bool, personas: bool }` — tracks background prefetch in flight |
+| `toneSuggestion` | `{ suggested_tone, reasoning }` — AI-suggested brand tone for Content Studio; null until fetched |
 
 **Key actions:**
 - `resetForNewSession()` — clears all session/artifact state (including `prefetch`) before starting a new workflow
@@ -299,6 +300,7 @@ After competitive benchmarking completes, `runAnalysis()` silently fires Positio
 
 ### Auth Panel (`components/AuthPanel.jsx`)
 - Client-side email validation with regex before making API calls
+- Company/Organization field is **mandatory** during account creation — frontend `validate()` blocks submission if empty, even though the backend also enforces it
 - Shows `PendingVerificationScreen` when `pendingVerificationEmail` is set
 - Handles `EMAIL_NOT_VERIFIED` (403) from login — shows inline message with resend link
 - Enter key submits forms
@@ -465,6 +467,7 @@ Production: `https://ai-marketing-prod.web.app/verify-email?token=...`
 | Channel asset generation | gpt-4o-mini | JSON |
 | Competitive benchmarking enrichment | gpt-4o-mini | JSON |
 | Content Studio (all asset types) | gpt-4o-mini | JSON |
+| Brand tone suggestion (`GET /api/mvp/content/suggest-tone/{project_id}`) | gpt-4o-mini | JSON `{ suggested_tone, reasoning }` — cached 24h per persona set |
 | Onboarding questionnaire | gpt-4o-mini | JSON |
 | Semantic memory embeddings | text-embedding-3-small | 1536-dim vector |
 
@@ -953,6 +956,7 @@ LLM results are cached in the `llm_cache` table keyed by SHA-256 of `agent + inp
 | POST /personas/generate | persona_builder | 6h |
 | POST /strategy/generate | channel_strategy_planner | 12h |
 | POST /roadmap/generate | roadmap_planner | 12h |
+| GET /content/suggest-tone/{id} | tone_suggester | 24h |
 
 Cache key is computed from inputs that affect the output (e.g., `analysis_report_id`, `persona_ids`) — not from the full payload — so trivial field changes don't invalidate the cache.
 

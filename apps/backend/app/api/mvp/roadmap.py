@@ -7,7 +7,7 @@ from app.core.auth import get_current_user
 from app.core.pipeline_tracer import trace_step
 from app.core.response_cache import get_cached, make_cache_key, set_cached
 from app.db import get_db
-from app.models import AnalysisReport, PersonaProfile, RoadmapPlan, User
+from app.models import AnalysisReport, PersonaProfile, PositioningStatement, ResearchReport, RoadmapPlan, User
 from app.services.roadmap_planner import generate_roadmap_plan
 
 from app.api.mvp.deps import (
@@ -55,9 +55,30 @@ def generate_roadmap_contract(
     )
     analysis_report = json.loads(analysis_row.report_json) if analysis_row else None
 
+    positioning_row = (
+        db.query(PositioningStatement)
+        .filter(PositioningStatement.project_id == business_profile_id)
+        .order_by(PositioningStatement.id.desc())
+        .first()
+    )
+    positioning = json.loads(positioning_row.payload_json) if positioning_row else None
+    if positioning is not None and positioning_row:
+        positioning.setdefault("statement_text", positioning_row.statement_text)
+        positioning.setdefault("rationale", positioning_row.rationale)
+
+    research_row = (
+        db.query(ResearchReport)
+        .filter(ResearchReport.project_id == business_profile_id)
+        .order_by(ResearchReport.id.desc())
+        .first()
+    )
+    research_report = json.loads(research_row.report_json) if research_row else None
+
     cache_key = make_cache_key("roadmap_planner", {
         "persona_ids": sorted([r.id for r in persona_rows]),
         "analysis_report_id": analysis_row.id if analysis_row else None,
+        "positioning_id": positioning_row.id if positioning_row else None,
+        "research_id": research_row.id if research_row else None,
     })
     roadmap_payload = get_cached(db, cache_key, ttl_hours=12)
     if roadmap_payload is None:
@@ -66,6 +87,8 @@ def generate_roadmap_contract(
                 project_name=project.name,
                 personas=personas,
                 analysis_report=analysis_report,
+                positioning=positioning,
+                research_report=research_report,
             )
         if not roadmap_payload.get("_is_fallback"):
             set_cached(db, cache_key, agent="roadmap_planner", payload=roadmap_payload)

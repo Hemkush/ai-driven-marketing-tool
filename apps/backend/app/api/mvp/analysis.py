@@ -1,7 +1,9 @@
+import asyncio
 import json
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.core.auth import get_current_user
@@ -124,6 +126,162 @@ def run_analysis_contract(
         "used_additional_context": bool(extra_context),
         "source_session_id": report.source_session_id,
     }
+
+
+@router.post("/analysis/run/stream")
+async def stream_analysis_contract(
+    payload: AnalysisRunRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Streaming version of /analysis/run — emits SSE progress events as the pipeline runs."""
+    business_profile_id = _resolve_business_profile_id(
+        payload.business_profile_id, payload.project_id
+    )
+    project = _owned_project_or_404(db, current_user, business_profile_id)
+    source_session = _latest_session_for_project(db, business_profile_id)
+    sessions = (
+        db.query(QuestionnaireSession)
+        .filter(QuestionnaireSession.project_id == business_profile_id)
+        .all()
+    )
+    session_ids = [s.id for s in sessions]
+    responses: list[QuestionnaireResponse] = []
+    if session_ids:
+        responses = (
+            db.query(QuestionnaireResponse)
+            .filter(
+                QuestionnaireResponse.session_id.in_(session_ids),
+                QuestionnaireResponse.answer_text != "",
+                QuestionnaireResponse.source != "agent_rejected",
+            )
+            .order_by(QuestionnaireResponse.sequence_no.asc())
+            .all()
+        )
+
+    response_payload = _compact_discovery_responses(responses, max_items=40)
+    extra_context = (payload.additional_context or "").strip()
+    if extra_context:
+        response_payload.append({
+            "question_text": "Additional context provided before analysis rerun",
+            "answer_text": extra_context,
+        })
+
+    conversation_analysis = None
+    if source_session and source_session.conversation_analysis_json:
+        try:
+            conversation_analysis = json.loads(source_session.conversation_analysis_json)
+        except Exception:
+            pass
+
+    cache_key = make_cache_key("competitive_benchmarker", {
+        "address": project.business_address or "",
+        "responses": response_payload,
+    })
+    cached_result = get_cached(db, cache_key, ttl_hours=24)
+
+    async def event_stream():
+        def sse(data: dict) -> str:
+            return f"data: {json.dumps(data)}\n\n"
+
+        if cached_result is not None:
+            yield sse({"type": "step", "message": "Loading cached analysis...", "step": 1, "total": 1})
+            quality_score = score_competitive_benchmarking(cached_result)
+            report = AnalysisReport(
+                project_id=business_profile_id,
+                source_session_id=source_session.id if source_session else None,
+                status="ready",
+                report_json=json.dumps(cached_result),
+                quality_score=quality_score,
+            )
+            db.add(report)
+            db.commit()
+            db.refresh(report)
+            yield sse({
+                "type": "complete",
+                "result": cached_result,
+                "quality_score": quality_score,
+                "analysis_report_id": report.id,
+            })
+            return
+
+        loop = asyncio.get_running_loop()
+        queue: asyncio.Queue = asyncio.Queue()
+        result_box: dict = {}
+
+        def on_step(message: str, step: int, total: int) -> None:
+            asyncio.run_coroutine_threadsafe(
+                queue.put({"type": "step", "message": message, "step": step, "total": total}),
+                loop,
+            )
+
+        def pipeline_task() -> None:
+            try:
+                result_box["result"] = run_competitive_benchmarking(
+                    response_payload,
+                    business_address=project.business_address,
+                    geographical_range=project.geographical_range,
+                    conversation_analysis=conversation_analysis,
+                    on_step=on_step,
+                )
+            except Exception as exc:
+                result_box["error"] = str(exc)
+            finally:
+                asyncio.run_coroutine_threadsafe(queue.put(None), loop)
+
+        future = loop.run_in_executor(None, pipeline_task)
+
+        while True:
+            item = await queue.get()
+            if item is None:
+                break
+            yield sse(item)
+
+        await asyncio.wrap_future(future)
+
+        if "error" in result_box:
+            yield sse({"type": "error", "message": result_box["error"]})
+            return
+
+        report_payload = result_box["result"]
+
+        try:
+            quality_score = score_competitive_benchmarking(report_payload)
+            _quality_gate(quality_score, agent="competitive_benchmarker")
+        except HTTPException as exc:
+            detail = exc.detail
+            msg = (
+                detail if isinstance(detail, str)
+                else detail.get("message", str(detail)) if isinstance(detail, dict)
+                else str(detail)
+            )
+            yield sse({"type": "error", "message": msg})
+            return
+
+        set_cached(db, cache_key, agent="competitive_benchmarker", payload=report_payload)
+        report = AnalysisReport(
+            project_id=business_profile_id,
+            source_session_id=source_session.id if source_session else None,
+            status="ready",
+            report_json=json.dumps(report_payload),
+            quality_score=quality_score,
+        )
+        db.add(report)
+        db.commit()
+        db.refresh(report)
+
+        yield sse({
+            "type": "complete",
+            "result": report_payload,
+            "quality_score": quality_score,
+            "analysis_report_id": report.id,
+        })
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.post("/analysis/assistant/query")

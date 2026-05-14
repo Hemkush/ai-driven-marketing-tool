@@ -1,0 +1,1 @@
+export { ContentAssetCards } from "../CompactCards";

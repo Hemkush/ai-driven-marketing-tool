@@ -1,4 +1,6 @@
+import { useEffect, useRef } from "react";
 import { NavLink, useLocation } from "react-router-dom";
+import { Check, LogOut } from "lucide-react";
 
 // ── Step map (4 phases matching the landing page workflow) ────────
 const STEP_GROUPS = [
@@ -51,15 +53,10 @@ function userInitials(email = "") {
 
 // ── Status icon components ────────────────────────────────────────
 function CheckIcon() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="20 6 9 17 4 12" />
-    </svg>
-  );
+  return <Check size={12} strokeWidth={2.8} />;
 }
 
-export default function AppShell({ me, onLogout, progress = {}, busy = false, children }) {
+export default function AppShell({ me, onLogout, progress = {}, busy = false, projectName = "", children }) {
   const location = useLocation();
   const currentPath = location.pathname;
 
@@ -80,6 +77,36 @@ export default function AppShell({ me, onLogout, progress = {}, busy = false, ch
   const doneCount = Object.values(progress).filter(Boolean).length;
   const progressPct = Math.round((doneCount / TOTAL_STEPS) * 100);
 
+  // Track newly-completed steps for unlock animation (DOM-only, no state)
+  const prevProgressRef = useRef({});
+  const unlockTimers = useRef([]);
+
+  useEffect(() => {
+    const prev = prevProgressRef.current;
+    const justDone = [];
+    for (const [path, isDone] of Object.entries(progress)) {
+      if (isDone && !prev[path]) justDone.push(path);
+    }
+    prevProgressRef.current = { ...progress };
+
+    if (justDone.length === 0) return;
+    justDone.forEach((path) => {
+      const el = document.querySelector(`[data-step="${CSS.escape(path)}"]`);
+      if (!el) return;
+      el.classList.add("newly-done");
+      const t = setTimeout(() => el.classList.remove("newly-done"), 900);
+      unlockTimers.current.push(t);
+    });
+    return () => {
+      unlockTimers.current.forEach(clearTimeout);
+      unlockTimers.current = [];
+    };
+  }, [progress]);
+
+  useEffect(() => {
+    document.title = `${activeLabel} — MarketPilot`;
+  }, [activeLabel]);
+
   return (
     <div className="app-shell">
 
@@ -99,12 +126,7 @@ export default function AppShell({ me, onLogout, progress = {}, busy = false, ch
             </span>
           </div>
           <button className="app-logout-btn" onClick={onLogout} title="Sign out" aria-label="Sign out">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
-              stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" />
-              <polyline points="16 17 21 12 16 7" />
-              <line x1="21" y1="12" x2="9" y2="12" />
-            </svg>
+            <LogOut size={14} strokeWidth={2} />
             <span>Sign out</span>
           </button>
         </div>
@@ -141,6 +163,7 @@ export default function AppShell({ me, onLogout, progress = {}, busy = false, ch
                 <NavLink
                   key={step.to}
                   to={step.to}
+                  data-step={step.to}
                   className={[
                     "app-sidebar-item",
                     isActive ? "active" : "",
@@ -163,6 +186,24 @@ export default function AppShell({ me, onLogout, progress = {}, busy = false, ch
             })}
           </div>
         ))}
+
+        {/* ── Stats widget ────────────────────────────────────── */}
+        <div className="app-sidebar-stats">
+          {projectName && (
+            <div className="app-sidebar-stat-row">
+              <span className="app-sidebar-stat-label">Project</span>
+              <span className="app-sidebar-stat-value app-sidebar-stat-project">{projectName}</span>
+            </div>
+          )}
+          <div className="app-sidebar-stat-row">
+            <span className="app-sidebar-stat-label">Progress</span>
+            <span className="app-sidebar-stat-value">{doneCount} / {TOTAL_STEPS}</span>
+          </div>
+          <div className="app-sidebar-kbd-hint">
+            <kbd>⌘K</kbd>
+            <span>quick navigate</span>
+          </div>
+        </div>
       </nav>
 
       {/* ── Main area ────────────────────────────────────────── */}
@@ -174,8 +215,8 @@ export default function AppShell({ me, onLogout, progress = {}, busy = false, ch
           <p className="app-page-desc">{activeDesc}</p>
         </div>
 
-        {/* Page content */}
-        <div className="app-content">
+        {/* Page content — keyed on pathname so CSS page-enter animation fires on every route change */}
+        <div key={location.pathname} className="app-content">
           {children}
         </div>
       </main>

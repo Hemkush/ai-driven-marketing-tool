@@ -50,6 +50,7 @@ _COST_INPUT: dict[str, float] = {
     "text-embedding-3-small":   0.02  / 1_000_000,
     "text-embedding-3-large":   0.13  / 1_000_000,
     "dall-e-3":                 0.0,   # charged per image, not tokens
+    "gpt-image-1":              0.0,   # charged per image, not tokens
 }
 _COST_OUTPUT: dict[str, float] = {
     "gpt-4o-mini":              0.60  / 1_000_000,
@@ -58,9 +59,11 @@ _COST_OUTPUT: dict[str, float] = {
     "text-embedding-3-small":   0.0,
     "text-embedding-3-large":   0.0,
     "dall-e-3":                 0.0,
+    "gpt-image-1":              0.0,
 }
-# DALL-E 3 standard 1024×1024 = $0.04/image
+# gpt-image-1 medium 1024×1024 ≈ $0.07/image; dall-e-3 standard = $0.04/image
 _COST_IMAGE: dict[str, float] = {
+    "gpt-image-1": 0.07,
     "dall-e-3": 0.04,
     "dall-e-2": 0.02,
 }

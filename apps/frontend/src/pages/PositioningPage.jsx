@@ -1,12 +1,13 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { NextStepCta } from "../components/UiBlocks";
-import { PositioningCard } from "../components/CompactCards";
+import { PositioningCard } from "../components/cards/PositioningCard";
 import { LoadingSkeleton } from "../components/LoadingSkeleton";
 import { TrustBadge } from "../components/TrustBadge";
 import { WhyThis } from "../components/WhyThis";
 import { AiChip } from "../components/AiChip";
 import { FeedbackThumbs } from "../components/FeedbackThumbs";
+import { GhostPreviewPositioning } from "../components/GhostPreview";
 
 export default function PositioningPage({ workflow }) {
   const { state, set, actions } = workflow;
@@ -51,6 +52,16 @@ export default function PositioningPage({ workflow }) {
       {/* Manual generate loading */}
       {state.busy && (
         <LoadingSkeleton lines={5} message="Generating your positioning statement…" />
+      )}
+
+      {/* Ghost preview — visible when no content yet */}
+      {!state.busy && !isPrefetching && !hasHistory && (
+        <div className="gp-page-wrap" style={{ margin: "0 0 8px" }}>
+          <div className="gp-wrap"><GhostPreviewPositioning /></div>
+          <div style={{ textAlign: "center", padding: "80px 32px 24px", color: "var(--text-secondary)", fontSize: "13px" }}>
+            <p style={{ margin: 0, fontWeight: 500 }}>Generate your positioning statement to see your unique market position.</p>
+          </div>
+        </div>
       )}
 
       {/* Gate error */}
