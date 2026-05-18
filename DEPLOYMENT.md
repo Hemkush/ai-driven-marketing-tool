@@ -78,15 +78,13 @@ python -c "import secrets; print('INTERNAL_API_KEY=' + secrets.token_hex(24))"
 
 ### 3b. Build and push the Docker image
 ```bash
-cd apps/backend
-
-# Build the image
-gcloud builds submit --tag gcr.io/your-project-id/ai-marketing-backend
+# From the project root — build and push the image
+gcloud builds submit apps/backend --tag gcr.io/your-project-id/ai-marketing-backend
 ```
 
 ### 3c. Deploy to Cloud Run
 ```bash
-gcloud run deploy ai-marketing-backend \
+gcloud run deploy backend \
   --image gcr.io/your-project-id/ai-marketing-backend \
   --platform managed \
   --region us-central1 \
@@ -108,7 +106,7 @@ gcloud run deploy ai-marketing-backend \
 ```
 
 > After deploy, Cloud Run shows the backend URL. It looks like:
-> `https://ai-marketing-backend-xxxxxxxxxx-uc.a.run.app`
+> `https://backend-xxxxxxxxxx-uc.a.run.app`
 > **Save this URL — you need it for the next step.**
 
 ### 3d. Run database migrations
@@ -172,7 +170,7 @@ firebase deploy --only hosting
 
 ### 4e. Update CORS on the backend
 ```bash
-gcloud run services update ai-marketing-backend \
+gcloud run services update backend \
   --region us-central1 \
   --update-env-vars "CORS_ORIGINS=https://your-project-id.web.app,https://your-custom-domain.com"
 ```

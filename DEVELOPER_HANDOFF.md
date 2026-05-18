@@ -1,6 +1,6 @@
 # Developer Handoff — AI-Driven Marketing Tool (MarketPilot)
 
-> Last updated: April 2026  
+> Last updated: May 2026  
 > Stack: React + Vite · FastAPI · PostgreSQL (Supabase) · OpenAI · Google Places API · Resend · Cloud Run · Firebase Hosting
 
 ---
@@ -192,6 +192,18 @@ ai-driven-marketing-tool/
 │       ├── .env                       # Dev env (VITE_API_BASE_URL)
 │       ├── .env.production            # Prod env
 │       └── nginx.conf                 # Nginx config (used in Docker)
+├── docs/
+│   └── pages/                         # Per-page technical documentation (10 files)
+│       ├── 00-overview.md             # Architecture + shared patterns reference
+│       ├── 01-landing-page.md         # Public landing page
+│       ├── 02-projects-page.md        # Project/session management
+│       ├── 03-questionnaire-page.md   # AI interview flow
+│       ├── 04-analysis-page.md        # Competitive benchmarking + SSE streaming
+│       ├── 05-positioning-page.md     # Versioned positioning statements
+│       ├── 06-personas-page.md        # Buyer persona generation
+│       ├── 07-research-page.md        # Market research with focus input
+│       ├── 08-roadmap-page.md         # 90-day roadmap generation
+│       └── 09-content-page.md         # Content Studio (all 12 asset types)
 ├── firebase.json                      # Firebase Hosting config
 ├── .firebaserc                        # Firebase project alias
 ├── DEPLOYMENT.md                      # Step-by-step deploy guide
@@ -396,10 +408,17 @@ This prevents a crash when the URL contains `%` from URL-encoded characters in p
 
 ## 8. Authentication System
 
+> **Current Status:** Email verification is **disabled** in the live deployment. `POST /api/auth/register` creates a `User` record directly and returns a JWT immediately — no pending registration step, no email sent. The `pending_registrations` table and `email_sender.py` service exist in the codebase but are not invoked by the registration handler. The flow below documents the full designed code path; re-enabling it requires updating the registration handler to use the pending flow.
+
 ### Flow
 
 ```
-REGISTER
+REGISTER (current — email verification disabled)
+  └─► POST /api/auth/register
+        └─► Create User directly (hashed password)
+        └─► Return { access_token, token_type: "bearer" }
+
+REGISTER (designed flow — currently inactive)
   └─► POST /api/auth/register
         └─► Create PendingRegistration (hashed password + random token)
         └─► Send verification email → {FRONTEND_URL}/verify-email?token=...

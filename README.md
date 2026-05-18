@@ -23,13 +23,13 @@ An AI-powered marketing strategy platform that transforms a 10-minute business i
 ## Architecture
 
 ```
-React 19 (Firebase Hosting)
+React 18 (Firebase Hosting)
     ↕ HTTPS / REST + JWT
 FastAPI (Google Cloud Run)
     ↕ Service calls
 10 AI Agents (OpenAI gpt-4o-mini + text-embedding-3-small + DALL-E 3)
     ↕ External APIs
-Google Places · OpenAI · SendGrid
+Google Places · OpenAI · Resend
     ↕ SQLAlchemy ORM
 PostgreSQL + pgvector (Supabase)
 ```
@@ -63,6 +63,8 @@ ai-driven-marketing-tool/
 │           ├── components/
 │           ├── state/    # useMvpWorkflow.js — global workflow state
 │           └── lib/      # API clients
+├── docs/
+│   └── pages/            # Per-page technical documentation (10 files)
 ├── portfolio.html         # Technical project showcase
 ├── Developer_Handoff.md   # Comprehensive engineering reference
 ├── DEPLOYMENT.md          # Cloud deployment guide
